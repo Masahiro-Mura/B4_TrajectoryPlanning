@@ -11,7 +11,7 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     % Place the ego vehicle at the start of the reference path
     % egoState = frenet2global(refPath,[37.5 18 0 0 0 0]); % scenario_20251125.m
     % egoState = frenet2global(refPath,[65 18 0 3.6 0 0]); % scenario_20251201.m
-    egoState = frenet2global(refPath,[65 18 0 3.6 0 0]); % scenario_20251208.m
+    egoState = frenet2global(refPath,[45 18 0 3.6 0 0]); % scenario_20251208.m
     
     
     % Retrieve pose struct from dynamicCapsuleList for all actors and ego car
@@ -26,7 +26,7 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     % viewer = scenario_20251125;
     % viewer = scenario_20251201;
     % viewer = scenario_20251204;
-    viewer = scenario_20251211;
+    viewer = scenario_20251212;
 
     viewer.SampleTime = scenarioObj.SampleTime;
   
