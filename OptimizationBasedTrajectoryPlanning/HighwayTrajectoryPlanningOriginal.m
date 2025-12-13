@@ -55,22 +55,31 @@ scenario.SampleTime = connector.TimeResolution; % in seconds
 % 10 Hz = 0.1秒ごとに軌道を再計算。
 replanRate = 10; % Hz
 
+
 % 現在の状態と計画状態の間隔を定義する。
 timeHorizons = 3:0.5:5; % [sec] 
 maxHorizon = max(timeHorizons); % [sec] 
 
-% コストパラメータの定義
-latDevWeight    =  1000; % 横方向ずれ（車線中央からの逸脱）
-timeWeight      =  0.001; % 短い時間を好む
-speedWeight     =  0.1; % 目標速度からの逸脱
 
-% 以下の制約に違反する軌道を排除する。
+% コスト重みの定義
+LatDevWeight    =  1000; % 横方向ずれ（車線中央からの逸脱）
+TimeWeight      =  0.001; % 短い時間を好む
+SpeedWeight     =  0.1; % 目標速度からの逸脱
+% 以下新しいコスト項
+LeadingGapWeight = 10; % 仮置き
+AdjacentForwardGapWeight = 10; % 仮置き
+AdjacentBehindGapWeight = 10; % 仮置き
+
+
+% 以下の制約に違反する軌道を排除する（軌道選択の部分）
 maxAcceleration = 3; % [m/s^2] 車両が出せる最大加速度を超えたら不適
 maxCurvature    = 0.02; % [1/m], or [rad/m] 最小旋回半径 ≈ 1m
 minVelocity     = 0; % [m/sec] 負の速度（バック）や停止を避ける
 
+
 % クルーズコントロール動作および軌道コスト評価時に使用される目標速度設定値。
 speedLimit = 18; % [m/sec] 巡航時の目標速度。コスト評価の基準値
+
 
 % プランナーが追従動作において目標とする最小距離。
 forwardsafetyGap = 16; % [m] 前車との最低距離。これを下回る軌道は不適切として棄却
@@ -123,81 +132,46 @@ while isRunning
 
     %% 終端状態の生成
     % 巡航制御の状態を生成
-    [termStatesCC,timesCC] = TSCruiseControl(...
-        refPath,laneWidth,EgoGlobalState,speedLimit,timeHorizons);
+    [termStatesCC,timesCC] = TSCruiseControl(refPath, laneWidth, EgoGlobalState, speedLimit, timeHorizons);
   
     % 前方車追従の状態を生成
-    [termStatesF,timesF] = TSLeadVehicleFollow(...
-        refPath,laneWidth,forwardsafetyGap,EgoGlobalState,AllActorGlobalState,carLen, rearAxleRatio, timeHorizons);
+    [termStatesF,timesF] = TSLeadVehicleFollow(refPath, laneWidth, forwardsafetyGap, EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, timeHorizons);
      
       % 車線変更の状態を生成
-    % [termStatesLC,timesLC] = TSLaneChange(...
-    %     refPath,laneWidth,EgoGlobalState, timeHorizons);
-
-    [termStatesLC,timesLC] = TSLaneChange(...
-    refPath, laneWidth, forwardsafetyGap, behindsafetyGap, ...
-    EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, timeHorizons);
-    
-
-
-
-    % 
-    % disp('CC');
-    % disp(termStatesCC);
-    % disp('LC');
-    % disp(termStatesLC);
-    % disp('F');
-    % disp(termStatesF);
-    %上記のdispで確認した限り，生成された終端状態に問題は無し
-
-
+    [termStatesLC,timesLC] = TSLaneChange(refPath, laneWidth, forwardsafetyGap, behindsafetyGap, EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, timeHorizons);
+   
     %% 終端状態をまとめる
      labels = [repmat("Cruise", size(termStatesCC,1), 1);
-                repmat("Follow", size(termStatesF,1), 1);
-                repmat("LaneChange", size(termStatesLC,1), 1)
+               repmat("Follow", size(termStatesF,1), 1);
+               repmat("LaneChange", size(termStatesLC,1), 1)
                ];
 
     % disp(labels);
     allTime = [timesCC; timesLC; timesF];
     % disp(allTime);
 
+
      %% 終端状態と時間を組み合わせる。
     allTS = [termStatesCC; termStatesF; termStatesLC];
     allDT = [timesCC; timesF; timesLC];
     numTS = [numel(timesCC); numel(timesF); numel(timesLC)];
     
-   
-    % disp('allTS');
-    % disp(allTS);s
-    % disp('allDT');
-    % disp(allDT);
-    % disp('numTS');
-    % disp(numTS);
-    % 上記の終端状態と時間の組み合わせもOK
-   
 
-    %% すべての終端状態のコストを評価する。
-    [costTS,latCostTS,timeCostTS,speedCostTS] = EvaluateTSCost(allTS,allDT,laneWidth,speedLimit,...
-        speedWeight, latDevWeight, timeWeight);
+     %% すべての終端状態のコストを評価する。
+    [costTS, latCostTS, timeCostTS, speedCostTS, LeadingCost, AdjForwardCost, AdjBehindCost] = EvaluateTSCost(allTS, allDT, laneWidth, speedLimit, SpeedWeight, LatDevWeight, TimeWeight, LeadingGapWeight, AdjacentForwardGapWeight, AdjacentBehindGapWeight, ForwardGaps);
 
 
     %% 軌道を生成
     EgoFrenetState = global2frenet(refPath,EgoGlobalState);
     [frenetTraj,globalTraj] = connect(connector,EgoFrenetState,allTS,allDT);
-    
-    % disp('egoFrenetState');
-    % disp(EgoFrenetState);
-    % disp('frenetTraj');
-    % disp(frenetTraj);
-    % disp('globalTraj');
-    % disp(globalTraj);
-
+ 
 
     %%  制約条件に違反する軌道を排除 
     isValid = EvaluateTrajectory(globalTraj,maxAcceleration,maxCurvature,minVelocity);
-    disp("Times " + num2str(simStep/10));
+    % disp("Times " + num2str(simStep/10));
+   
     a = table(costTS, latCostTS, timeCostTS, speedCostTS, isValid, 'VariableNames', {'TotalCost','LatCost','TimeCost','SpeedCost','制約違反'});
-    disp(a);
+    % disp(a);
 
 
     %% --- シーン内の全アクターの予測軌道を衝突チェッカーに反映 --- %%
@@ -205,6 +179,7 @@ while isRunning
         actorPoses(i).States = futureTrajectory(i).Trajectory(:,1:3);
     end
     updateObstaclePose(capList,actorID,actorPoses);
+
 
     %% --- 同一レーンにいる最も近い前方車両との車間距離 --- %%
     try
@@ -224,19 +199,19 @@ while isRunning
 
 
 
-        % % --- 同一車線，前方車との距離
-        FrontGaps = nan(1, numActors);
+        % %  同一車線，前方車との距離
+        ForwardGaps = nan(1, numActors);
         for a = 1:numActors
             AllActorLaneNum = PredictLane(AllActorFrenetState(a,:), laneWidth, 1/replanRate);
             if AllActorLaneNum == EgoLaneNum && AllActorFrenetRear(a,1) > EgoFrenetFront
-                FrontGaps(a) = AllActorFrenetRear(a,1) - EgoFrenetFront;
+                ForwardGaps(a) = AllActorFrenetRear(a,1) - EgoFrenetFront;
             end
         end
 
         % 最も近い車両の選定
-        validIdx = find(~isnan(FrontGaps)); % ~isnanは論理否定演算子，NaN出ない要素番号を返す
+        validIdx = find(~isnan(ForwardGaps)); % ~isnanは論理否定演算子，NaN出ない要素番号を返す
         if ~isempty(validIdx)
-            [minGap, relIdx] = min(FrontGaps(validIdx));
+            [minGap, relIdx] = min(ForwardGaps(validIdx));
             forwardactorIdx = validIdx(relIdx);
         else
             minGap = nan;
@@ -246,24 +221,32 @@ while isRunning
 
 
 
-        % % --- 同一車線，後方車両との距離
-        RearGaps = nan(1,numActors);
+        % %  同一車線，後方車両との距離
+        BehindGaps = nan(1,numActors);
         for a = 1:numActors
             AllActorLaneNum = PredictLane(AllActorFrenetState(a,:), laneWidth, 1/replanRate);
             if AllActorLaneNum == EgoLaneNum && AllActorFrenetFront(a,1) < EgoFrenetRear
-                RearGaps(a) = EgoFrenetRear - AllActorFrenetFront(a,1);
+                BehindGaps(a) = EgoFrenetRear - AllActorFrenetFront(a,1);
             end
         end
 
         % 最も近い車両の選定
-        validRear = find(~isnan(RearGaps));
+        validRear = find(~isnan(BehindGaps));
         if ~isempty(validRear)
-            [minRearGap, relRearIdx] = min(RearGaps(validRear));
+            [minRearGap, relRearIdx] = min(BehindGaps(validRear));
             behindActorIdx = validRear(relRearIdx);
         else
             minRearGap = nan;
             behindActorIdx = nan;
         end
+
+
+        % % 隣接前方車両との距離
+        
+
+
+
+        % % 隣接後方車両との距離
 
 
         
