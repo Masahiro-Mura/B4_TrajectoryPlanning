@@ -57,7 +57,6 @@ replanRate = 10; % Hz
 
 % 現在の状態と計画状態の間隔を定義する。
 timeHorizons = 3:0.5:5; % [sec] 
-% timeHorizons = 1:3; % [sec]
 maxHorizon = max(timeHorizons); % [sec] 
 
 % コストパラメータの定義
