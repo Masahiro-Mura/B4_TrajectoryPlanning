@@ -62,13 +62,12 @@ maxHorizon = max(timeHorizons); % [sec]
 
 
 % コスト重みの定義
-LatDevWeight    =  1000; % 横方向ずれ（車線中央からの逸脱）
-TimeWeight      =  0.001; % 短い時間を好む
-SpeedWeight     =  0.1; % 目標速度からの逸脱
+LatDevWeight    =  0.1; % 横方向ずれ（車線中央からの逸脱）
+TimeWeight      =  1000; % 短い時間を好む
+SpeedWeight     =  100; % 目標速度からの逸脱
 % 以下新しいコスト項
-LeadingGapWeight = 10; % 仮置き
-AdjacentForwardGapWeight = 10; % 仮置き
-AdjacentBehindGapWeight = 10; % 仮置き
+ForwardGapWeight = 1; % 仮置き
+BehindGapWeight = 1; % 仮置き
 
 
 % 以下の制約に違反する軌道を排除する（軌道選択の部分）
@@ -124,49 +123,58 @@ while isRunning
     %% while文開始
     simStep = simStep + 1;
     
-    %% アクター車両の現在の状態と計画ホライズンにわたる軌跡を取得する。
+    %% 自車両の位置，周辺車両の軌跡を計算
+
+    % 自車両のFrenet位置 取得
+    EgoFrenetState = global2frenet(refPath,EgoGlobalState);
+    
+    % アクター車両の現在の状態と計画ホライズンにわたる軌跡を取得する。
     [AllActorGlobalState,futureTrajectory,isRunning] = ...
         RetrieveActorGroundTruth(scenario,futureTrajectory,replanRate,maxHorizon);
     
 
+    %% 先行車両と自車との車間距離，後方車両と自車との車間距離を計算
+    [validIdx, ForwardGap, BehindGap, EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardLog, gapBehindLog, timeLog, speedLog] ...
+         = ComputeGaps(EgoFrenetState, carLen, rearAxleRatio, refPath, AllActorGlobalState, ...
+         laneWidth, replanRate, numActors, gapForwardLog, gapBehindLog, leadIdxLog, behindIdxLog, timeLog, simStep, scenario, EgoGlobalState, speedLog);
 
-    %% 終端状態の生成
-    % 巡航制御の状態を生成
+
+    %% 軌道計算
+    % 巡航制御の終端状態を生成
     [termStatesCC,timesCC] = TSCruiseControl(refPath, laneWidth, EgoGlobalState, speedLimit, timeHorizons);
   
-    % 前方車追従の状態を生成
+    % 前方車追従の終端状態を生成
     [termStatesF,timesF] = TSLeadVehicleFollow(refPath, laneWidth, forwardsafetyGap, EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, timeHorizons);
      
-      % 車線変更の状態を生成
+    % 車線変更の終端状態を生成
     [termStatesLC,timesLC] = TSLaneChange(refPath, laneWidth, forwardsafetyGap, behindsafetyGap, EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, timeHorizons);
    
-    %% 終端状態をまとめる
+    
+    % 終端状態をまとめる
      labels = [repmat("Cruise", size(termStatesCC,1), 1);
                repmat("Follow", size(termStatesF,1), 1);
                repmat("LaneChange", size(termStatesLC,1), 1)
                ];
-
     % disp(labels);
     allTime = [timesCC; timesLC; timesF];
     % disp(allTime);
 
 
-     %% 終端状態と時間を組み合わせる。
+    % 終端状態と時間を組み合わせる。
     allTS = [termStatesCC; termStatesF; termStatesLC];
     allDT = [timesCC; timesF; timesLC];
     numTS = [numel(timesCC); numel(timesF); numel(timesLC)];
     
 
-     %% すべての終端状態のコストを評価する。
-    [costTS, latCostTS, timeCostTS, speedCostTS, LeadingCost, AdjForwardCost, AdjBehindCost] = EvaluateTSCost(allTS, allDT, laneWidth, speedLimit, SpeedWeight, LatDevWeight, TimeWeight, LeadingGapWeight, AdjacentForwardGapWeight, AdjacentBehindGapWeight, ForwardGaps);
+    % すべての終端状態のコストを評価する。 要修正点！！！
+    [costTS, latCostTS, timeCostTS, speedCostTS, ForwardDistanceCost, BehindDistanceCost] = EvaluateTSCost(allTS, allDT, laneWidth, speedLimit, ForwardGap, BehindGap, SpeedWeight, LatDevWeight, TimeWeight, ForwardGapWeight, BehindGapWeight);
 
-
-    %% 軌道を生成
-    EgoFrenetState = global2frenet(refPath,EgoGlobalState);
+    % 軌道を生成
     [frenetTraj,globalTraj] = connect(connector,EgoFrenetState,allTS,allDT);
  
 
-    %%  制約条件に違反する軌道を排除 
+    %% 軌道選定
+    % 制約条件に違反する軌道を排除 
     isValid = EvaluateTrajectory(globalTraj,maxAcceleration,maxCurvature,minVelocity);
     % disp("Times " + num2str(simStep/10));
    
@@ -174,109 +182,22 @@ while isRunning
     % disp(a);
 
 
-    %% --- シーン内の全アクターの予測軌道を衝突チェッカーに反映 --- %%
+    % --- シーン内の全アクターの予測軌道を衝突チェッカーに反映 --- %%
     for i = 1:numel(actorPoses)
         actorPoses(i).States = futureTrajectory(i).Trajectory(:,1:3);
     end
     updateObstaclePose(capList,actorID,actorPoses);
 
 
-    %% --- 同一レーンにいる最も近い前方車両との車間距離 --- %%
-    try
-        EgoFrenetFront = EgoFrenetState(1) + carLen*(1-rearAxleRatio);
-        EgoFrenetRear  = EgoFrenetState(1) - carLen*rearAxleRatio;
-        
-        AllActorFrenetState = global2frenet(refPath,AllActorGlobalState);
-      
-        AllActorFrenetFront = AllActorFrenetState(:,1) + carLen*(1-rearAxleRatio);
-        AllActorFrenetRear  = AllActorFrenetState(:,1) - carLen*rearAxleRatio;
-
-        EgoLaneNum = PredictLane(EgoFrenetState, laneWidth, 1/replanRate);
-        disp('REgoFrenetState');
-        disp(EgoFrenetState);
-        disp('AllActorFrenetState');
-        disp(AllActorFrenetState);
+   
 
 
-
-        % %  同一車線，前方車との距離
-        ForwardGaps = nan(1, numActors);
-        for a = 1:numActors
-            AllActorLaneNum = PredictLane(AllActorFrenetState(a,:), laneWidth, 1/replanRate);
-            if AllActorLaneNum == EgoLaneNum && AllActorFrenetRear(a,1) > EgoFrenetFront
-                ForwardGaps(a) = AllActorFrenetRear(a,1) - EgoFrenetFront;
-            end
-        end
-
-        % 最も近い車両の選定
-        validIdx = find(~isnan(ForwardGaps)); % ~isnanは論理否定演算子，NaN出ない要素番号を返す
-        if ~isempty(validIdx)
-            [minGap, relIdx] = min(ForwardGaps(validIdx));
-            forwardactorIdx = validIdx(relIdx);
-        else
-            minGap = nan;
-            forwardactorIdx = nan;
-        end
-
-
-
-
-        % %  同一車線，後方車両との距離
-        BehindGaps = nan(1,numActors);
-        for a = 1:numActors
-            AllActorLaneNum = PredictLane(AllActorFrenetState(a,:), laneWidth, 1/replanRate);
-            if AllActorLaneNum == EgoLaneNum && AllActorFrenetFront(a,1) < EgoFrenetRear
-                BehindGaps(a) = EgoFrenetRear - AllActorFrenetFront(a,1);
-            end
-        end
-
-        % 最も近い車両の選定
-        validRear = find(~isnan(BehindGaps));
-        if ~isempty(validRear)
-            [minRearGap, relRearIdx] = min(BehindGaps(validRear));
-            behindActorIdx = validRear(relRearIdx);
-        else
-            minRearGap = nan;
-            behindActorIdx = nan;
-        end
-
-
-        % % 隣接前方車両との距離
-        
-
-
-
-        % % 隣接後方車両との距離
-
-
-        
-        gapForwardLog(end+1,1) = minGap;           %#ok<SAGROW>
-        gapBehindLog(end+1,1) = minRearGap;             %#ok<SAGROW>
-        leadIdxLog(end+1,1) = forwardactorIdx;          %#ok<SAGROW>
-        behindIdxLog(end+1,1) = behindActorIdx;         %#ok<SAGROW>
-        timeLog(end+1,1) = (simStep-1)*scenario.SampleTime;  %#ok<SAGROW>
-        % Log ego speed (5th element of egoState is speed in this representation)
-        if numel(EgoGlobalState) >= 5
-            speedLog(end+1,1) = EgoGlobalState(5); %#ok<SAGROW>
-
-        else
-            speedLog(end+1,1) = nan; %#ok<SAGROW>
-        end
-    catch ME
-        % If frenet conversion fails for any reason, skip logging this step
-        warning('Gap logging skipped at step %d: %s', simStep, ME.message); 
-        gapForwardLog(end+1,1) = nan; %#ok<SAGROW>
-        leadIdxLog(end+1,1) = nan; %#ok<SAGROW>
-        timeLog(end+1,1) = (simStep-1)*scenario.SampleTime; %#ok<SAGROW>
-        speedLog(end+1,1) = nan; %#ok<SAGROW>
+    % --- 車間距離も考慮した有効軌道選定 --- （ルールベースの部分）
+    if minGap <= forwardsafetyGap
+        % forwardsafetyGapよりminGapが小さい場合，
+        % isValidの最初の5要素をFalseにする
+        isValid(1:min(5, numel(isValid))) = false;
     end
-
-%% --- 車間距離も考慮した有効軌道選定 --- （ルールベースの部分）%%
-if minGap <= forwardsafetyGap
-    % forwardsafetyGapよりminGapが小さい場合，
-    % isValidの最初の5要素をFalseにする
-    isValid(1:min(5, numel(isValid))) = false;
-end
 
 
 %% --- 評価順序を決定 --- %%
@@ -303,15 +224,15 @@ for i = 1:numel(idx)
             % disp('Frenet系での自車両の状態'); % 0s後のものになっている
             % disp(EgoFrenetState);
             % disp(gapForwardLog);
-            disp('自車のフロント'); % 0s後のものになってる
-            disp(EgoFrenetFront);
-            disp('他車のリア'); % 0.1s後のものになってる
-            disp(AllActorFrenetRear);
+            % disp('自車のフロント'); % 0s後のものになってる
+            % disp(EgoFrenetFront);
+            % disp('他車のリア'); % 0.1s後のものになってる
+            % disp(AllActorFrenetRear);
             disp(['前方車間距離: ' num2str(minGap) ' m']); % 0sと0.1sのミックス
             % disp('curA'); % 0.1s後のものになってる
             % disp(AllActorFrenetState);
-            disp('有効性');
-            disp(isValid);
+            % disp('有効性');
+            % disp(isValid);
             break;
         else
             trajectoryEvaluation(idx(i)) = 0;
