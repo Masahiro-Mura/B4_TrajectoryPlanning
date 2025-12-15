@@ -4,7 +4,7 @@ function lineHandles = VisualizeScene(lineHandles, globalTrajectories, isValid, 
 
     numTraj = numel(globalTrajectories);
 
-    maxNumTraj = 20;
+    maxNumTraj = 44;
     if isempty(lineHandles)
         for i = 1:maxNumTraj
             lineHandles(end+1) = line;
