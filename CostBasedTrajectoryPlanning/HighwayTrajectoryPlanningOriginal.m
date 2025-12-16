@@ -99,6 +99,7 @@ modeBinLog   = zeros(0,3);      % Nx3 [Cruise, Follow, LaneChange] を 0/1 で o
 labelsLog    = {};              % 各ステップの候補ラベル配列（可変長なので cell）
 modeColLog   = {};              % 各ステップの ✓/"" ベクトル（可変長なので cell）
 yawLog = [];  % [rad] 自車両のヨー角ログ
+latAccLog = [];   % 横方向加速度ログ [m/s^2]
 
 
 %% === 逐次軌道計算ループ=== %%
@@ -176,9 +177,8 @@ while isRunning
     % 上記の終端状態と時間の組み合わせもOK
    
 
-    %% すべての終端状態のコストを評価する。
-    [costTS,latCostTS,timeCostTS,speedCostTS] = EvaluateTSCost(allTS,allDT,laneWidth,speedLimit,...
-        speedWeight, latDevWeight, timeWeight);
+   
+    
 
 
     %% 軌道を生成
@@ -191,6 +191,12 @@ while isRunning
     % disp(frenetTraj);
     % disp('globalTraj');
     % disp(globalTraj);
+
+
+     %% すべての終端状態のコストを評価する。
+    [costTS,latCostTS,timeCostTS,speedCostTS] = EvaluateTSCost(allTS,allDT,laneWidth,speedLimit,...
+        speedWeight, latDevWeight, timeWeight);
+
 
 
     %%  制約条件に違反する軌道を排除 
@@ -314,6 +320,10 @@ modeBinLog(end+1,:)   = onehot;                          %#ok<SAGROW>
             
             % --- ヨー角ログを記録（ラジアン単位） ---
             yawLog(end+1,1) = EgoGlobalState(3)*180/pi;  %#ok<SAGROW>
+            
+            % --- 横方向加速度 [m/s^2] ---
+            latAcc = EgoGlobalState(5)^2 * EgoGlobalState(4);
+            latAccLog(end+1,1) = latAcc; %#ok<SAGROW>
 
             scenarioViewer.Actors(1).AngularVelocity(3) = EgoGlobalState(4)*EgoGlobalState(5);
             
@@ -338,43 +348,45 @@ end
 close(videoWriter);
 fprintf('Simulation video saved to: %s\n', videoFile);
 
+
 %% --- 車間距離のログ ---%%
-% Always attempt to produce and save the gap plot. If no data was logged, show a message.
 figName = fullfile(pwd, 'gap_plot.png');
+
 if ~isempty(timeLog)
-    hFig = figure('Name','Ego to lead gaps','NumberTitle','off'); clf(hFig); hold on; grid on;
-    % Plot nearest lead and nearest behind gaps as continuous lines
-    hPlotLead = plot(timeLog, gapForwardLog, '-', 'Color', 'b', 'LineWidth', 3);
-    hold on;
-    hPlotBehind = plot(timeLog, gapBehindLog, '-', 'Color', 'r', 'LineWidth', 3); 
-    
-    % 前後のsafetyGapの表示
-    hYlineLead = yline(forwardsafetyGap, 'b--');
-    hYlineLead.Label = '';
-    hYlineLead.LabelHorizontalAlignment = 'right';
-    hYlineLead.LabelVerticalAlignment = 'bottom';
-    hYlineLead.FontName = 'Times New Roman';
-    hYlineLead.FontSize = 14;
+    hFig = figure('Name','Ego to lead gaps','NumberTitle','off');
+    clf(hFig); hold on; grid on;
 
-    hYlineBehind = yline(behindsafetyGap, 'r--');
-    hYlineBehind.LabelHorizontalAlignment = 'right';
-    hYlineBehind.LabelVerticalAlignment = 'top';
-    hYlineBehind.FontName = 'Times New Roman';
-    hYlineBehind.FontSize = 14;
+    % --- Gap プロット ---
+    hPlotLead   = plot(timeLog, gapForwardLog, '-', 'Color', 'b', 'LineWidth', 4);
+    hPlotBehind = plot(timeLog, gapBehindLog,  '-', 'Color', 'r', 'LineWidth', 4);
 
-    % Set labels and title with Times New Roman
+    % --- Safety Gap（前方：青点線）---
+    hYlineLead = yline(forwardsafetyGap, 'b--', 'LineWidth', 2);
+
+    % --- Safety Gap（後方：赤点線）---
+    hYlineBehind = yline(behindsafetyGap, 'r--', 'LineWidth', 2);
+
+    % --- 軸・タイトル ---
     hX = xlabel('Time (s)');
     hY = ylabel('Gap (m)');
     hT = title('Vehicle to Vehicle Gaps');
-    % Legend: show lead/behind gap lines only
+
+    % 縦軸範囲
+    ylim([0 40]);
+
+    % --- 凡例（ここだけで名前を出す）---
     hLeg = legend([hPlotLead hPlotBehind hYlineLead hYlineBehind], ...
-    {'Forward Gap','Behind Gap','Forward Safety Gap', 'Behind Safety Gap'}, ...
-    'Location','northeast');
+        {'Forward Gap','Behind Gap','Forward Safety Gap','Behind Safety Gap'}, ...
+        'Location','northeast');
+
+    % --- フォント設定 ---
     set([hX,hY,hT],'FontName','Times New Roman','FontSize',14);
     set(hLeg,'FontName','Times New Roman','FontSize',14);
     set(gca,'FontName','Times New Roman','FontSize',14);
+
     hold off;
     drawnow;
+
     try
         saveas(hFig, figName);
         fprintf('Gap plot saved to: %s\n', figName);
@@ -382,10 +394,13 @@ if ~isempty(timeLog)
         warning('Failed to save gap plot to %s', figName);
     end
 else
-    % No log data collected — create an empty figure with message and save it
-    hFig = figure('Name','Ego to lead gaps (no data)','NumberTitle','off'); clf(hFig);
-        tHandle = text(0.1,0.5,'No gap data was logged during the simulation.','FontSize',12,'FontName','Times New Roman');
+    % データなしの場合
+    hFig = figure('Name','Ego to lead gaps (no data)','NumberTitle','off');
+    clf(hFig);
+    text(0.1,0.5,'No gap data was logged during the simulation.', ...
+        'FontSize',12,'FontName','Times New Roman');
     axis off;
+
     try
         saveas(hFig, figName);
         fprintf('No-gap plot saved to: %s\n', figName);
@@ -394,13 +409,14 @@ else
     end
 end
 
+
  
 %% --- 速度ログ--- %%
 speedFigName = fullfile(pwd, 'speed_plot.png');
 if ~isempty(timeLog)
     hFig2 = figure('Name','Ego speed','NumberTitle','off'); clf(hFig2); grid on; hold on;
     % Plot ego speed vs time as continuous line
-    hSpeed = plot(timeLog, speedLog, '-', 'Color', [0.8500 0.3250 0.0980], 'LineWidth', 2);
+    hSpeed = plot(timeLog, speedLog, '-', 'Color', [0.8500 0.3250 0.0980], 'LineWidth', 4);
     % Labels and title
     hX2 = xlabel('Time (s)');
     hY2 = ylabel('Speed (m/s)');
@@ -449,7 +465,7 @@ if ~isempty(timeLog) && ~isempty(yawLog)
     clf(hFig3); grid on; hold on;
 
     % Plot yaw vs time
-    hYaw = plot(timeLog, yawLog, '-', 'Color', [0.3010 0.7450 0.9330], 'LineWidth', 2);
+    hYaw = plot(timeLog, yawLog, '-', 'Color', [0.3010 0.7450 0.9330], 'LineWidth', 4);
 
     % Labels and title
     hX3 = xlabel('Time (s)');
@@ -493,7 +509,31 @@ else
     end
 end
 
+%% --- 横方向加速度ログ --- %%
+latAccFigName = fullfile(pwd, 'lateral_acc_plot.png');
 
+if ~isempty(timeLog) && ~isempty(latAccLog)
+    hFig = figure('Name','Lateral Acceleration','NumberTitle','off');
+    clf(hFig); grid on; hold on;
+
+    plot(timeLog, latAccLog, 'k-', 'LineWidth', 4);
+    % yline(2.5, 'r--', 'LineWidth', 2);
+    % yline(-2.5,'r--', 'LineWidth', 2);
+
+    xlabel('Time (s)');
+    ylabel('Lateral Acceleration (m/s^2)');
+    title('Ego Vehicle Lateral Acceleration');
+
+    set(gca,'FontName','Times New Roman','FontSize',14);
+    hold off;
+
+    try
+        saveas(hFig, latAccFigName);
+        fprintf('Lateral acc plot saved to: %s\n', latAccFigName);
+    catch
+        warning('Failed to save lateral acc plot to %s', latAccFigName);
+    end
+end
 
 
 
@@ -646,6 +686,39 @@ if ~isempty(timeLog) && ~isempty(yawLog)
 
     close(v);
     disp('✅ Yaw + red bar video saved.');
+
+    %% ==== 横方向加速度（Lateral Acceleration） ====
+    if ~isempty(timeLog) && ~isempty(latAccLog)
+        v = VideoWriter('lateral_acc_bar.mp4', 'MPEG-4');
+        v.FrameRate = 10; open(v);
+    
+        fig = figure('Name','Lateral Acceleration with Red Bar','NumberTitle','off');
+        clf(fig); hold on; grid on;
+    
+        plot(timeLog, latAccLog, 'k-', 'LineWidth', 2);
+        yline(2.5, 'r--', 'LineWidth', 2);
+        yline(-2.5,'r--', 'LineWidth', 2);
+    
+        xlabel('Time (s)');
+        ylabel('Lateral Acceleration (m/s^2)');
+        title('Ego Vehicle Lateral Acceleration');
+        ylim([-5 5]);
+        xlim([min(timeLog) max(timeLog)]);
+    
+        set(gca,'FontName','Times New Roman','FontSize',14);
+        barLine = xline(timeLog(1), 'r-', 'LineWidth', 2);
+    
+        for i = 1:length(timeLog)
+            set(barLine, 'Value', timeLog(i));
+            title(sprintf('Lateral Acc (t = %.2f s)', timeLog(i)));
+            frame = getframe(fig);
+            writeVideo(v, frame);
+        end
+    
+        close(v);
+        disp('✅ Lateral acceleration + red bar video saved.');
+    end
+
 end
 
 %% ==== 走行モード（Mode） ====
