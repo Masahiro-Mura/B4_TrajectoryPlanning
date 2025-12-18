@@ -1,6 +1,6 @@
 function [terminalStates, times] = TSLaneChange( ...
     refPath, laneWidth, forwardsafetyGap, behindsafetyGap, ...
-    EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, dt)
+    EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, SpeedLimit, dt)
 %% --- 自車速度ゼロなら車線変更は行わない ---
     if EgoGlobalState(5) == 0
         terminalStates = [];
@@ -13,7 +13,8 @@ function [terminalStates, times] = TSLaneChange( ...
     %% ==== 1. 自車 Frenet 変換 & 現在レーン取得 ====
     egoFrenet = global2frenet(refPath, EgoGlobalState);  % [s, s_dot, ..., d, ...] 想定
     sEgo0     = egoFrenet(1);
-    vEgo      = EgoGlobalState(5);          % 終端状態での目標速度として使用
+    % vEgo      = EgoGlobalState(5);
+    vEgo      = EgoGlobalState(5);
     curLane   = PredictLane(egoFrenet, laneWidth, 0);  % t=0 でのレーン
 
     %% ==== 2. 隣接レーン（左・右） ====
@@ -39,14 +40,13 @@ function [terminalStates, times] = TSLaneChange( ...
         frenetActors = zeros(numActors, 6);
         actorLanes   = zeros(numActors, 1);
 
-        % ついでに「自車と同じ位置っぽいもの」を除外する保険もかけておく
         dxy = vecnorm(AllActorGlobalState(:,1:2) - EgoGlobalState(1:2), 2, 2);
         AllActorGlobalState(dxy < 1e-3, :) = [];  % ほぼ同位置なら除外
         numActors = size(AllActorGlobalState, 1);
 
         if numActors > 0
-            frenetActors = zeros(numActors, 6);
-            actorLanes   = zeros(numActors, 1);
+            % frenetActors = zeros(numActors, 6);
+            % actorLanes   = zeros(numActors, 1);
             for i = 1:numActors
                 frenetActors(i,:) = global2frenet(refPath, AllActorGlobalState(i,:));
                 actorLanes(i,1)   = PredictLane(frenetActors(i,:), laneWidth, 0);
@@ -120,37 +120,52 @@ function [terminalStates, times] = TSLaneChange( ...
             hasForwardVehicle = ~isnan(Af);
             hasBehindVehicle  = ~isnan(Ab);
 
-            % AdjacentForwardGap = (sF0   - sEgo0);
-            % AdjacentBehindGap  = (sEgo0 - sB0);
-            
 
-
-            % --- ケース分岐 ---
+            % ■ 隣接車線に車両がいない場合
             if ~hasForwardVehicle && ~hasBehindVehicle
-                % ■ 隣接車線に車両がいない場合
-                s_term = NaN;
+               s_term = NaN;
+               vEgo = SpeedLimit;
 
-            elseif hasForwardVehicle && ~hasBehindVehicle && (sF0   - sEgo0) > forwardsafetyGap
-                % ■ 隣接先行車のみがいる場合
-                % s = AdjacentForwardVehicle - carLen*rearAxleRatio - forwardsafetyGap - carLen*(1-rearAxleRatio)
+
+
+            % ■ 隣接先行車のみがいる場合
+            elseif hasForwardVehicle && ~hasBehindVehicle && (sF0   - sEgo0) > forwardsafetyGap && vF0 < vEgo
                 s_term = Af - carLen * rearAxleRatio - forwardsafetyGap - carLen * (1 - rearAxleRatio);
+                if vF0 >= SpeedLimit
+                    vEgo = SpeedLimit;
+                else 
+                    vEgo = vF0; 
+                end
+               
 
-            elseif ~hasForwardVehicle && hasBehindVehicle && (sEgo0 - sB0) > behindsafetyGap
-                % ■ 隣接後方車のみがいる場合
-                % s = AdjacentBehindVehicle + carLen*(1-rearAxleRatio) + behindsafetyGap + carLen*rearAxleRatio
+            % ■ 隣接後方車のみがいる場合
+            elseif ~hasForwardVehicle && hasBehindVehicle && (sEgo0 - sB0) > behindsafetyGap 
                 s_term = Ab + carLen * (1 - rearAxleRatio) + behindsafetyGap + carLen * rearAxleRatio;
+                if vB0 <= SpeedLimit
+                    vEgo = SpeedLimit;
+                else 
+                    continue;
+                end
+
 
             else
                 % ■ 先行車・後方車どちらもいる場合
                 frontBoundary  = Af - carLen * rearAxleRatio - forwardsafetyGap;
                 behindBoundary = Ab + carLen * (1 - rearAxleRatio) + behindsafetyGap;
-
-                gap = frontBoundary - behindBoundary;
+                gap = frontBoundary - behindBoundary;                              
 
                 % ギャップが carLen 以上のときのみ終端状態生成
-                if gap >= carLen && (sF0   - sEgo0) > forwardsafetyGap && (sEgo0 - sB0) > behindsafetyGap
+                if gap >= carLen && (sF0   - sEgo0) > forwardsafetyGap && (sEgo0 - sB0) > behindsafetyGap 
                     % ギャップ中央に自車を置く
                     s_term = frontBoundary - gap / 2;
+
+                    if vF0 >= SpeedLimit && vB0 <= SpeedLimit
+                        vEgo = SpeedLimit;  % 自車両の速度を前方車両に合わせる
+                    elseif vF0 < SpeedLimit
+                        vEgo = vF0;
+                    else
+                        continue;
+                    end
                 else
                     % ギャップ不足 → この dt では終端状態を生成しない
                     continue;
