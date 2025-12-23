@@ -7,11 +7,9 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     % Create storage container for predicted actor trajectories
     numActors = numel(scenarioObj.Actors)-1;
     futureTrajectory = repelem(struct('Trajectory',[]),numActors,1);
+    
 
-    % Place the ego vehicle at the start of the reference path
-    % egoState = frenet2global(refPath,[37.5 18 0 0 0 0]); % scenario_20251125.m
-    % egoState = frenet2global(refPath,[65 18 0 3.6 0 0]); % scenario_20251201.m
-    egoState = frenet2global(refPath,[45 18 0 3.6 0 0]); % scenario_20251208.m
+    egoState = frenet2global(refPath,[67 18 0 laneWidth*0 0 0]); 
     
     
     % Retrieve pose struct from dynamicCapsuleList for all actors and ego car
@@ -19,14 +17,9 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     [egoID, egoPoses] = egoPose(capList, capList.EgoIDs);
 
     stepPerUpdate = (1/replanRate)/scenarioObj.SampleTime;
+   
     
-    
-    % viewer = scenario_20251113_1;
-    % viewer = scenario_To_Check_Whether_Ego_Car_Can_Change_To_Right_Lane;
-    % viewer = scenario_20251125;
-    % viewer = scenario_20251201;
-    % viewer = scenario_20251204; %
-    viewer = scenario_20251212;
+    viewer = scenario_20251223;
 
     viewer.SampleTime = scenarioObj.SampleTime;
   
