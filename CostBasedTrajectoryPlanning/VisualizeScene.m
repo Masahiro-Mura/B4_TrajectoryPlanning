@@ -47,11 +47,15 @@ function lineHandles = VisualizeScene(lineHandles, globalTrajectories, isValid, 
                 idx = idx+1;
             end
         else
+ 
             set(lineHandles(idx),'XData',[],'YData',[]);
             idx = idx+1;
         end
     end
     hold off;
     drawnow
+
 end
+
+
 
