@@ -57,7 +57,7 @@ replanRate = 10; % Hz
 
 
 % 現在の状態と計画状態の間隔を定義する。
-timeHorizons = 3:0.5:5; % [sec] 
+timeHorizons = 3:0.2:5; % [sec] 
 maxHorizon = max(timeHorizons); % [sec] 
 
 
@@ -123,7 +123,7 @@ while isRunning
     %% while文開始
     simStep = simStep + 1;
     
-    %% 自車両の位置，周辺車両の軌跡を計算
+    %% 事前計算
 
     % 自車両のFrenet位置 取得
     EgoFrenetState = global2frenet(refPath,EgoGlobalState);
@@ -133,13 +133,14 @@ while isRunning
         RetrieveActorGroundTruth(scenario,futureTrajectory,replanRate,maxHorizon);
     
 
-    %% 先行車両と自車との車間距離，後方車両と自車との車間距離を計算
-    [validIdx, ForwardGap, BehindGap, EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardLog, gapBehindLog, timeLog, speedLog] ...
+    % 先行車両と自車との車間距離，後方車両と自車との車間距離を計算 ※おそらくもっと後ろに書くべき
+    [EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardLog, gapBehindLog, timeLog, speedLog] ...
          = ComputeGaps(EgoFrenetState, carLen, rearAxleRatio, refPath, AllActorGlobalState, ...
          laneWidth, replanRate, numActors, gapForwardLog, gapBehindLog, leadIdxLog, behindIdxLog, timeLog, simStep, scenario, EgoGlobalState, speedLog);
 
 
-    %% 軌道計算
+    %% ===== 軌道計算 ===== %%
+    
     % 巡航制御の終端状態を生成
     [termStatesCC,timesCC] = TSCruiseControl(refPath, laneWidth, EgoGlobalState, speedLimit, timeHorizons);
   
@@ -166,14 +167,17 @@ while isRunning
     numTS = [numel(timesCC); numel(timesF); numel(timesLC)];
     
 
-    % すべての終端状態のコストを評価する。 要修正点！！！
-    [costTS, latCostTS, timeCostTS, speedCostTS, ForwardDistanceCost, BehindDistanceCost] = EvaluateTSCost(allTS, allDT, laneWidth, speedLimit, ForwardGap, BehindGap, SpeedWeight, LatDevWeight, TimeWeight, ForwardGapWeight, BehindGapWeight);
-
     % 軌道を生成
     [frenetTraj,globalTraj] = connect(connector,EgoFrenetState,allTS,allDT);
  
 
-    %% 軌道選定
+    %% ===== 軌道選定 ===== %%
+
+    % すべての終端状態のコストを評価
+    [costTS, latCostTS, timeCostTS, speedCostTS] = EvaluateTSCost(allTS, allDT, laneWidth, speedLimit, SpeedWeight, LatDevWeight, TimeWeight) 
+    % [costTS, latCostTS, timeCostTS, speedCostTS, ForwardDistanceCost, BehindDistanceCost]...
+    %     = EvaluateTSCost(allTS, allDT, laneWidth, speedLimit, ForwardGap, BehindGap, SpeedWeight, LatDevWeight, TimeWeight, ForwardGapWeight, BehindGapWeight);
+
     % 制約条件に違反する軌道を排除 
     isValid = EvaluateTrajectory(globalTraj,maxAcceleration,maxCurvature,minVelocity);
     % disp("Times " + num2str(simStep/10));
@@ -189,86 +193,86 @@ while isRunning
     updateObstaclePose(capList,actorID,actorPoses);
 
 
-   
-
 
     % --- 車間距離も考慮した有効軌道選定 --- （ルールベースの部分）
     if minGap <= forwardsafetyGap
         % forwardsafetyGapよりminGapが小さい場合，
         % isValidの最初の5要素をFalseにする
-        isValid(1:min(5, numel(isValid))) = false;
+        isValid(1:min(11, numel(isValid))) = false;
     end
 
 
-%% --- 評価順序を決定 --- %%
-[cost, idx] = sort(costTS);
-optimalTrajectory = [];
-
-trajectoryEvaluation = nan(numel(isValid),1); % numelは要素数を返す
-
-
-% 最小コストから順に、各軌道の衝突をチェックする。
-for i = 1:numel(idx)
-    if isValid(idx(i))
-        % エゴオブジェクトの候補軌道でカプセルリストを更新する。
-        egoPoses.States = globalTraj(idx(i)).Trajectory(:,1:3);
-        updateEgoPose(capList,egoID,egoPoses);
-
-        % 衝突をチェックする。
-        isColliding = checkCollision(capList);
-
-        if all(~isColliding)
-            % 衝突が検出されない場合、これが最適軌道である。
-            trajectoryEvaluation(idx(i)) = 1;
-            optimalTrajectory = globalTraj(idx(i)).Trajectory;
-            % disp('Frenet系での自車両の状態'); % 0s後のものになっている
-            % disp(EgoFrenetState);
-            % disp(gapForwardLog);
-            % disp('自車のフロント'); % 0s後のものになってる
-            % disp(EgoFrenetFront);
-            % disp('他車のリア'); % 0.1s後のものになってる
-            % disp(AllActorFrenetRear);
-            disp(['前方車間距離: ' num2str(minGap) ' m']); % 0sと0.1sのミックス
-            % disp('curA'); % 0.1s後のものになってる
-            % disp(AllActorFrenetState);
-            % disp('有効性');
-            % disp(isValid);
-            break;
-        else
-            trajectoryEvaluation(idx(i)) = 0;
+    % 評価順序を決定 
+    [cost, idx] = sort(costTS);
+    optimalTrajectory = [];
+    
+    trajectoryEvaluation = nan(numel(isValid),1); % numelは要素数を返す
+    
+    
+    % 最小コストから順に、各軌道の衝突をチェックする。
+    for i = 1:numel(idx)
+        if isValid(idx(i))
+            % エゴオブジェクトの候補軌道でカプセルリストを更新する。
+            egoPoses.States = globalTraj(idx(i)).Trajectory(:,1:3);
+            updateEgoPose(capList,egoID,egoPoses);
+    
+            % 衝突をチェックする。
+            isColliding = checkCollision(capList);
+    
+            if all(~isColliding)
+                % 衝突が検出されない場合、これが最適軌道である。
+                trajectoryEvaluation(idx(i)) = 1;
+                optimalTrajectory = globalTraj(idx(i)).Trajectory;
+                % disp('Frenet系での自車両の状態'); % 0s後のものになっている
+                % disp(EgoFrenetState);
+                % disp(gapForwardLog);
+                % disp('自車のフロント'); % 0s後のものになってる
+                % disp(EgoFrenetFront);
+                % disp('他車のリア'); % 0.1s後のものになってる
+                % disp(AllActorFrenetRear);
+                disp(['前方車間距離: ' num2str(minGap) ' m']); % 0sと0.1sのミックス
+                % disp('curA'); % 0.1s後のものになってる
+                % disp(AllActorFrenetState);
+                % disp('有効性');
+                % disp(isValid);
+                break;
+            else
+                trajectoryEvaluation(idx(i)) = 0;
+            end
         end
     end
-end
  
-%% === 選定モードを決定し、ログ化 === %%
-% （Tdisp を作る前に modeCol を確定させる）
-selectedIdx = find(trajectoryEvaluation==1, 1);  % 最初に有効と判定された候補
 
-selLabel = "";           % 既定値（未選定）
-onehot   = [0 0 0];      % [Cruise, Follow, LaneChange]
-
-if ~isempty(selectedIdx)
-    selLabel = labels(selectedIdx);  % "Cruise" / "Follow" / "LaneChange"
-
-    % one-hot 化（順序は [Cruise, Follow, LaneChange] で固定）
-    switch selLabel
-        case "Cruise"
-            onehot = [1 0 0];
-        case "Follow"
-            onehot = [0 2 0];
-        case "LaneChange"
-            onehot = [0 0 3];
-        otherwise
-            onehot = [0 0 0];
+    %% ※ここから下はとりあえずOK
+    % === 選定モードを決定し、ログ化 === %%
+    % （Tdisp を作る前に modeCol を確定させる）
+    selectedIdx = find(trajectoryEvaluation==1, 1);  % 最初に有効と判定された候補
+    
+    selLabel = "";           % 既定値（未選定）
+    onehot   = [0 0 0];      % [Cruise, Follow, LaneChange]
+    
+    if ~isempty(selectedIdx)
+        selLabel = labels(selectedIdx);  % "Cruise" / "Follow" / "LaneChange"
+    
+        % one-hot 化（順序は [Cruise, Follow, LaneChange] で固定）
+        switch selLabel
+            case "Cruise"
+                onehot = [1 0 0];
+            case "Follow"
+                onehot = [0 2 0];
+            case "LaneChange"
+                onehot = [0 0 3];
+            otherwise
+                onehot = [0 0 0];
+        end
     end
-end
+    
+    % --- 時刻歴ログに追記 ---
+    modeTimeLog(end+1,1)  = (simStep-1)*scenario.SampleTime; %#ok<SAGROW>
+    modeLabelLog(end+1,1) = selLabel;                        %#ok<SAGROW>
+    modeBinLog(end+1,:)   = onehot;                          %#ok<SAGROW>
 
-% --- 時刻歴ログに追記 ---
-modeTimeLog(end+1,1)  = (simStep-1)*scenario.SampleTime; %#ok<SAGROW>
-modeLabelLog(end+1,1) = selLabel;                        %#ok<SAGROW>
-modeBinLog(end+1,:)   = onehot;                          %#ok<SAGROW>
-
-%% --- サンプリングされた軌跡を表示--- %%
+    %% --- サンプリングされた軌跡を表示--- %%
     lineHandles = VisualizeScene(lineHandles,globalTraj,isValid,trajectoryEvaluation);
 
 
