@@ -63,8 +63,7 @@ x___4 = vehicle(scenario, ...
 waypoints = [66 3.6 0;
     800 3.6 0];
 speed = [16;16];
-yaw =  [0;0];
-trajectory(x___4, waypoints, speed, 'Yaw', yaw);
+trajectory(x___4, waypoints, speed, waittime);
 
 x___5 = vehicle(scenario, ...
     'ClassID', 1, ...
@@ -85,6 +84,5 @@ x___6 = vehicle(scenario, ...
 waypoints = [140 3.6 0;
     800 3.6 0];
 speed = [16;16];
-yaw =  [0;0];
-trajectory(x___6, waypoints, speed, 'Yaw', yaw);
+trajectory(x___6, waypoints, speed, waittime);
 
