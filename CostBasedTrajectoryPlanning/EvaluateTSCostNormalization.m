@@ -13,8 +13,6 @@ function [costs, latCost, timeCost, speedCost] = EvaluateTSCostNormalization(ter
     % 速度差コスト
     SpeedCost_raw = abs(terminalStates(:,2) - SpeedLimit);
 
-    % 一貫性コスト
-    % Consistency_raw = ( - )
 
     % 正規化
     latCost_n   = minmax01(LatCost_raw);
