@@ -1,6 +1,6 @@
 function [EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardLog, gapBehindLog, timeLog, speedLog] ...
          = ComputeGaps(EgoFrenetState, carLen, rearAxleRatio, refPath, AllActorGlobalState, ...
-         laneWidth, replanRate, numActors, gapForwardLog, gapBehindLog, leadIdxLog, behindIdxLog, timeLog, simStep, scenario, EgoGlobalState, speedLog);
+         laneWidth, numActors, gapForwardLog, gapBehindLog, leadIdxLog, behindIdxLog, timeLog, simStep, scenario, EgoGlobalState, speedLog);
 
     EgoFrenetFront = EgoFrenetState(1) + carLen*(1-rearAxleRatio);
     EgoFrenetRear  = EgoFrenetState(1) - carLen*rearAxleRatio;
@@ -10,18 +10,13 @@ function [EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardL
     AllActorFrenetFront = AllActorFrenetState(:,1) + carLen*(1-rearAxleRatio);
     AllActorFrenetRear  = AllActorFrenetState(:,1) - carLen*rearAxleRatio;
 
-    EgoLaneNum = PredictLane(EgoFrenetState, laneWidth, 1/replanRate);
-    disp('REgoFrenetState');
-    disp(EgoFrenetState);
-    disp('AllActorFrenetState');
-    disp(AllActorFrenetState);
-
+    EgoLaneNum = PredictLane(EgoFrenetState, laneWidth, 0);
 
 
     % % --- 同一車線，前方車との距離
     FrontGaps = nan(1, numActors);
     for a = 1:numActors
-        AllActorLaneNum = PredictLane(AllActorFrenetState(a,:), laneWidth, 1/replanRate);
+        AllActorLaneNum = PredictLane(AllActorFrenetState(a,:), laneWidth, 0);
         if AllActorLaneNum == EgoLaneNum && AllActorFrenetRear(a,1) > EgoFrenetFront
             FrontGaps(a) = AllActorFrenetRear(a,1) - EgoFrenetFront;
         end
@@ -43,7 +38,7 @@ function [EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardL
     % % --- 同一車線，後方車両との距離
     RearGaps = nan(1,numActors);
     for a = 1:numActors
-        AllActorLaneNum = PredictLane(AllActorFrenetState(a,:), laneWidth, 1/replanRate);
+        AllActorLaneNum = PredictLane(AllActorFrenetState(a,:), laneWidth, 0);
         if AllActorLaneNum == EgoLaneNum && AllActorFrenetFront(a,1) < EgoFrenetRear
             RearGaps(a) = EgoFrenetRear - AllActorFrenetFront(a,1);
         end
