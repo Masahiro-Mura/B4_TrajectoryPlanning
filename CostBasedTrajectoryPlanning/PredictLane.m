@@ -3,7 +3,7 @@ function laneNum = PredictLane(frenetState, laneWidth, dt)
     narginchk(3,3);
 
     % laneBounds = [inf (2:-1:-2)*laneWidth -inf]; % 4車線用
-    laneBounds = [inf, (1.5:-1:-1.5)*laneWidth, -inf]; % 3車線用
+    laneBounds = [inf, (1.5:-1:-1.5)*laneWidth, -inf]; % 3車線用 車線の境界線
 
     laneNum = zeros(numel(dt),1);
     
@@ -47,7 +47,6 @@ function laneNum = PredictLane(frenetState, laneWidth, dt)
             % Determine future lane
             % laneNum(i) = min(find(dLaneEgo(2:(end-1)) >= 0 & dLaneEgo(3:(end)) < 0,1),4); % 4車線用     
             laneNum(i) = min(find(dLaneEgo(2:(end-1)) >= 0 & dLaneEgo(3:(end)) < 0,1),3); % 3車線用
-
         end
     end
 end
