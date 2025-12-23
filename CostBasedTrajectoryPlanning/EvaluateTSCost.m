@@ -1,22 +1,24 @@
-function [costs, latCost, timeCost, speedCost] = EvaluateTSCost(terminalStates, times, laneWidth, speedLimit, speedWeight, latWeight, timeWeight)
-    
+%% 元のコスト関数
+function [costs, latCost, timeCost, speedCost] = EvaluateTSCost(terminalStates, times, laneWidth, SpeedLimit, speedWeight, latWeight, timeWeight)
+
     % Find lateral deviation from nearest lane center
     % laneCenters = (1.5:-1:-1.5)*laneWidth; % 4車線用
     laneCenters = (1:-1:-1)*laneWidth; % 3車線用
-    
+
     latDeviation = abs(laneCenters-terminalStates(:,4)); % 各候補の終端位置と各車線中心との距離, 4とはs, ds, dds, l, dl, ddlの4番目ということ
-    
-    % Calculate lateral deviation cost (column vector)
+
+    % 横偏差コスト
     latCost = min(latDeviation,[],2) * latWeight;
 
-    % Ensure times is a column vector so all cost terms are column vectors
+    % 時間差コスト
     timeCost = (1 ./times) * timeWeight;
 
-    % Calculate terminal speed vs desired speed cost (column vector)
-    speedCost = abs(terminalStates(:,2)-speedLimit) * speedWeight;
+    % 速度差コスト
+    speedCost = abs(terminalStates(:,2)-SpeedLimit) * speedWeight;
 
-    
-    % Return cumulative cost as a column vector (one scalar per terminal)
+    % 全合計コスト
     costs = latCost + timeCost + speedCost;
 
 end
+
+
