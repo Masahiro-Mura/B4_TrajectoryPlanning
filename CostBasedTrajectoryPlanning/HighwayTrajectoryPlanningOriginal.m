@@ -1,35 +1,20 @@
 clc; clear; close all;
-addpath('../Scenario');
-% scenario = SDpaper_scenario1;
-% scenario = scenario1;
-% scenario = scenario_20251113;
-% scenario = scenario_20251113_1;
-% scenario = scenario_To_Check_Whether_Ego_Car_Can_Change_To_Right_Lane;
-% scenario = scenario_20251125;
-% scenario = scenario_20251201;
-% scenario = scenario_20251204;
-scenario = scenario_20251212;
+addpath('..\Scenario\m_file\');
+scenario = scenario_20251223;
 
 % デフォルトの車両プロパティ
-carLen   = 4.7; % [m] 一般的な乗用車の全長
-carWidth = 1.8; % [m] 一般的な乗用車の全幅
-rearAxleRatio = 0.25; % 全長 4.7 m なら、後軸は後端から 1.175 m (4.7 × 0.25) の位置にある、という意味。
-
-% Define road dimensions
-laneWidth   = carWidth*2; % [m] 車線幅
+carLen   = 4.7; 
+carWidth = 1.8; 
+rearAxleRatio = 0.25; 
+laneWidth   = carWidth*2;
 
 plot(scenario);
-
-waypoints = [0 0; 800 0]; % in meters
+waypoints = [0 0; 800 0]; 
 refPath = referencePathFrenet(waypoints); 
 
 connector = trajectoryGeneratorFrenet(refPath);
 
-
-
 capList = dynamicCapsuleList;
-
-
 
 egoID = 1; % 自車両には「1」を割り振り，dynamicCapsuleList に登録する車両を一意に識別する番号
 [egoID, egoGeom] = egoGeometry(capList,egoID); % dynamicCapsuleList（capList）内で、ID=1 の Ego 車両用の ジオメトリ情報を取り出します。
@@ -60,17 +45,19 @@ timeHorizons = 3:0.5:5; % [sec]
 maxHorizon = max(timeHorizons); % [sec] 
 
 % コストパラメータの定義
-latDevWeight    =  1000; % 横方向ずれ（車線中央からの逸脱）
-timeWeight      =  0.001; % 短い時間を好む
-speedWeight     =  0.1; % 目標速度からの逸脱
+LatWeight         =  0.5;  % 横偏差の重み
+TimeWeight        =  0.5;  % 時間コストの重み
+SpeedWeight       =  1.0;  % 速度差コストの重み
+LongSafetyWeight  =  6.0;  % 縦方向安全コストの重み
+c1                =  0.05;  % c1 はチューニングパラメータ（0.05〜0.2くらいで調整してみる）
 
-% 以下の制約に違反する軌道を排除する。
-maxAcceleration = 3; % [m/s^2] 車両が出せる最大加速度を超えたら不適
-maxCurvature    = 0.02; % [1/m], or [rad/m] 最小旋回半径 ≈ 1m
-minVelocity     = 0; % [m/sec] 負の速度（バック）や停止を避ける
+% 以下の制約に違反する軌道を排除
+maxAcceleration = 3; 
+maxCurvature    = 0.02; 
+minVelocity     = 0; 
 
-% クルーズコントロール動作および軌道コスト評価時に使用される目標速度設定値。
-speedLimit = 18; % [m/sec] 巡航時の目標速度。コスト評価の基準値
+% 目標速度設定値
+SpeedLimit = 18; 
 
 % プランナーが追従動作において目標とする最小距離。
 forwardsafetyGap = 16; % [m] 前車との最低距離。これを下回る軌道は不適切として棄却
@@ -90,17 +77,44 @@ leadIdxLog = [];    % store which actor was the nearest lead (optional)
 behindIdxLog = [];  % store which actor was the nearest behind (optional)
 timeLog = [];
 speedLog = [];      % rows: timesteps, single column: ego speed (m/s)
-simStep = -0;
+simStep = 0;
 
 % --- モードログ用初期化ボックス ---
-modeTimeLog  = [];              % Nx1 時刻[s]
+% modeTimeLog  = [];              % Nx1 時刻[s]
 modeLabelLog = strings(0,1);    % Nx1 選定モード（"Cruise","Follow","LaneChange",または "" ）
 modeBinLog   = zeros(0,3);      % Nx3 [Cruise, Follow, LaneChange] を 0/1 で one-hot
 labelsLog    = {};              % 各ステップの候補ラベル配列（可変長なので cell）
 modeColLog   = {};              % 各ステップの ✓/"" ベクトル（可変長なので cell）
 yawLog = [];  % [rad] 自車両のヨー角ログ
 latAccLog = [];   % 横方向加速度ログ [m/s^2]
+prevTS = [];
+prevT  = [];
 
+
+% 横偏差コストログ
+CruiseLatCostLog = [];
+FollowingLatCostLog = [];
+ChangeLatCostLog = [];
+
+% 速度差コストログ
+CruiseSpeedCostLog = [];
+FollowingSpeedCostLog = [];
+ChangeSpeedCostLog = [];
+
+% 時間差コストログ
+CruiseTimeCostLog = [];
+FollowingTimeCostLog = [];
+ChangeTimeCostLog = [];
+
+% 一貫性コストログ
+CruiseConsisCostLog = [];
+FollowingConsisCostLog = [];
+ChangeConsisCostLog = [];
+
+% 全計コストログ
+CruiseTotalCostLog = [];
+FollowingTotalCostLog = [];
+ChangeTotalCostLog = [];
 
 %% === 逐次軌道計算ループ=== %%
 tic 
@@ -122,89 +136,256 @@ while isRunning
     
 
 
-    %% 終端状態の生成
-    % 巡航制御の状態を生成
-    [termStatesCC,timesCC] = TSCruiseControl(...
-        refPath,laneWidth,EgoGlobalState,speedLimit,timeHorizons);
+    %% ===== 軌道計算 ===== %%
+    % 巡航制御の状態を生成 ＋ 先行車両との車間距離
+    [termStatesCC,timesCC,leadGapsCC] = TSCruiseControl(...
+        refPath,laneWidth,EgoGlobalState,SpeedLimit,timeHorizons, AllActorGlobalState);
+
   
-    % 前方車追従の状態を生成
-    [termStatesF,timesF] = TSLeadVehicleFollow(...
+    % 前方車追従の状態を生成（追加出力: 各予測秒数ごとの先行車との車間距離 5x1）
+    [termStatesF,timesF,leadGapsF] = TSLeadVehicleFollow(...
         refPath,laneWidth,forwardsafetyGap,EgoGlobalState,AllActorGlobalState,carLen, rearAxleRatio, timeHorizons);
-     
+
+
       % 車線変更の状態を生成
     % [termStatesLC,timesLC] = TSLaneChange(...
-    %     refPath,laneWidth,EgoGlobalState, timeHorizons);
-
-    [termStatesLC,timesLC] = TSLaneChange(...
+    % refPath, laneWidth, forwardsafetyGap, behindsafetyGap, ...
+    % EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, SpeedLimit, timeHorizons);
+    [termStatesLC, timesLC, leadGapsLC] = TSLaneChange( ...
     refPath, laneWidth, forwardsafetyGap, behindsafetyGap, ...
-    EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, timeHorizons);
-    
+    EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, SpeedLimit, timeHorizons);
+   
 
+    % 終端状態をまとめる
+    Labels = [repmat("Cruise", size(termStatesCC,1), 1);
+              repmat("Follow", size(termStatesF,1), 1);
+              repmat("LaneChange", size(termStatesLC,1), 1)
+             ];
+    AllTime = [timesCC; timesF; timesLC];
+    AllGaps = [leadGapsCC; leadGapsF; leadGapsLC];
+   
 
-
-    % 
-    % disp('CC');
-    % disp(termStatesCC);
-    % disp('LC');
-    % disp(termStatesLC);
-    % disp('F');
-    % disp(termStatesF);
-    %上記のdispで確認した限り，生成された終端状態に問題は無し
-
-
-    %% 終端状態をまとめる
-     labels = [repmat("Cruise", size(termStatesCC,1), 1);
-                repmat("Follow", size(termStatesF,1), 1);
-                repmat("LaneChange", size(termStatesLC,1), 1)
-               ];
-
-    % disp(labels);
-    allTime = [timesCC; timesLC; timesF];
-    % disp(allTime);
-
-     %% 終端状態と時間を組み合わせる。
+    % 終端状態と時間を組み合わせる。
     allTS = [termStatesCC; termStatesF; termStatesLC];
-    allDT = [timesCC; timesF; timesLC];
+    % allDT = [timesCC; timesF; timesLC];
     numTS = [numel(timesCC); numel(timesF); numel(timesLC)];
     
-   
-    % disp('allTS');
-    % disp(allTS);s
-    % disp('allDT');
-    % disp(allDT);
-    % disp('numTS');
-    % disp(numTS);
-    % 上記の終端状態と時間の組み合わせもOK
-   
-
-   
     
-
-
-    %% 軌道を生成
+    % 軌道を生成
     EgoFrenetState = global2frenet(refPath,EgoGlobalState);
-    [frenetTraj,globalTraj] = connect(connector,EgoFrenetState,allTS,allDT);
+    [frenetTraj,globalTraj] = connect(connector,EgoFrenetState,allTS,AllTime);
     
-    % disp('egoFrenetState');
-    % disp(EgoFrenetState);
-    % disp('frenetTraj');
-    % disp(frenetTraj);
-    % disp('globalTraj');
-    % disp(globalTraj);
+        % 同一レーンにいる最も近い前方車両との車間距離 
+    [EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardLog, gapBehindLog, timeLog, speedLog] ...
+         = ComputeGaps(EgoFrenetState, carLen, rearAxleRatio, refPath, AllActorGlobalState, ...
+         laneWidth, numActors, gapForwardLog, gapBehindLog, leadIdxLog, behindIdxLog, timeLog, simStep, scenario, EgoGlobalState, speedLog);
+    
 
+    dObs = AllGaps;
+    disp('dObs');
+    disp(dObs);
 
-     %% すべての終端状態のコストを評価する。
-    [costTS,latCostTS,timeCostTS,speedCostTS] = EvaluateTSCost(allTS,allDT,laneWidth,speedLimit,...
-        speedWeight, latDevWeight, timeWeight);
+    %% ===== 軌道選定 ===== %%
 
+    % 元のコスト関数
+    % [costTS,latCostTS,timeCostTS,speedCostTS] = EvaluateTSCost(allTS,allDT,laneWidth,SpeedLimit,...
+    %     SpeedWeight, LatWeight, TimeWeight);
+    
+    % 正規化
+    % [costTS,latCostTS,timeCostTS,speedCostTS] = EvaluateTSCostNormalization(allTS,allDT,laneWidth,SpeedLimit,...
+    % SpeedWeight, LatWeight, TimeWeight);
+    
+    % 正規化＋一貫性コスト
+    % [costTS, latCostTS, timeCostTS, speedCostTS, consCostTS] ...
+    % = EvaluateTSCostNew(...
+    % allTS, allDT, laneWidth, SpeedLimit, ...
+    % SpeedWeight, LatWeight, TimeWeight, ConsistencyWeight, ...
+    % prevTS, prevT, modeBinLog);
 
+    % 正規化 + 縦方向安全コスト
+    [costTS, latCostTS, timeCostTS, speedCostTS, longSafeCostTS] = ...
+    EvaluateTSCostNormalization1(allTS, AllTime, laneWidth, SpeedLimit, ...
+                                SpeedWeight, LatWeight, TimeWeight, ...
+                                LongSafetyWeight, dObs, c1, forwardsafetyGap);
+   
 
-    %%  制約条件に違反する軌道を排除 
-    isValid = EvaluateTrajectory(globalTraj,maxAcceleration,maxCurvature,minVelocity);
-    disp("Times " + num2str(simStep/10));
-    a = table(costTS, latCostTS, timeCostTS, speedCostTS, isValid, 'VariableNames', {'TotalCost','LatCost','TimeCost','SpeedCost','制約違反'});
+    %  制約条件に違反する軌道を排除 
+    isValid = EvaluateTrajectory(globalTraj,maxAcceleration,maxCurvature,minVelocity); % ここを軌道計画の段階で行いたい
+    
+    % disp("Times " + num2str(simStep/10));
+    a = table(Labels, AllTime, costTS, latCostTS, timeCostTS, speedCostTS, longSafeCostTS, isValid, ...
+    'VariableNames', {'Mode', 'PredictTime', 'TotalCost', 'LatCost', 'TimeCost', 'SpeedCost', 'longSafeCostTS','制約違反'});
+    % a = table(labels, allTime, costTS, latCostTS, timeCostTS, speedCostTS, consCostTS, isValid, ...
+    % 'VariableNames', {'Mode', 'PredictTime', 'TotalCost', 'LatCost', 'TimeCost', 'SpeedCost', 'ConsistencyCost', '制約違反'});
     disp(a);
+      
 
+
+
+    %% 各時刻でモードごとのLatCostを抽出
+    CruiseLatCost = NaN(1,5);  % デフォルトはNaN、5列分のサイズに合わせる
+    FollowingLatCost = NaN(1,5);  % デフォルトはNaN、5列分のサイズに合わせる
+    ChangeLatCost = NaN(1,10);  % ここでは10列分のNaNを初期値として設定
+    
+    % "Cruise" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'Cruise'))
+        CruiseLatCost = a.LatCost(strcmp(a.Mode, 'Cruise'))';  % 該当する行を抽出
+    end
+    
+    % "Following" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'Follow'))
+        FollowingLatCost = a.LatCost(strcmp(a.Mode, 'Follow'))';  % 該当する行を抽出
+    end
+    
+    % "LaneChange" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'LaneChange'))
+        ChangeLatCost = a.LatCost(strcmp(a.Mode, 'LaneChange'))';  % 該当する行を抽出
+    end
+    
+
+     % それぞれのLatCostが必要な行列サイズ（5x1または10x1）であることを確認
+    % もし不足していればNaNで埋める
+    if length(CruiseLatCost) < 5
+        CruiseLatCost = [CruiseLatCost, NaN(1, 5 - length(CruiseLatCost))];  % サイズを5x1に揃える
+    end
+    
+    if length(FollowingLatCost) < 5
+        FollowingLatCost = [FollowingLatCost, NaN(1, 5 - length(FollowingLatCost))];  % サイズを5x1に揃える
+    end
+    
+    if length(ChangeLatCost) < 10
+        ChangeLatCost = [ChangeLatCost, NaN(1, 10 - length(ChangeLatCost))];  % サイズを10x1に揃える
+    end
+   
+    
+    % 各時刻の値を1x5または1x10の行列にして格納
+    CruiseLatCostLog(end+1,:)    = CruiseLatCost;    %#ok<SAGROW>
+    FollowingLatCostLog(end+1,:) = FollowingLatCost; %#ok<SAGROW>
+    ChangeLatCostLog (end+1,:)   = ChangeLatCost;    %#ok<SAGROW>
+       
+    %% 各時刻でモードごとのSpeedを抽出
+    CruiseSpeedCost = NaN(1,5);  % デフォルトはNaN、5列分のサイズに合わせる
+    FollowingSpeedCost = NaN(1,5);  % デフォルトはNaN、5列分のサイズに合わせる
+    ChangeSpeedCost = NaN(1,10);  % ここでは10列分のNaNを初期値として設定
+    
+    % "Cruise" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'Cruise'))
+        CruiseSpeedCost = a.SpeedCost(strcmp(a.Mode, 'Cruise'))';  % 該当する行を抽出
+    end
+    
+    % "Following" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'Follow'))
+        FollowingSpeedCost = a.SpeedCost(strcmp(a.Mode, 'Follow'))';  % 該当する行を抽出
+    end
+    
+    % "LaneChange" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'LaneChange'))
+        ChangeSpeedCost = a.SpeedCost(strcmp(a.Mode, 'LaneChange'))';  % 該当する行を抽出
+    end
+    
+
+     % それぞれのLatCostが必要な行列サイズ（5x1または10x1）であることを確認
+    % もし不足していればNaNで埋める
+    if length(CruiseSpeedCost) < 5
+        CruiseSpeedCost = [CruiseSpeedCost, NaN(1, 5 - length(CruiseSpeedCost))];  % サイズを5x1に揃える
+    end
+    
+    if length(FollowingSpeedCost) < 5
+        FollowingSpeedCost = [FollowingSpeedCost, NaN(1, 5 - length(FollowingSpeedCost))];  % サイズを5x1に揃える
+    end
+    
+    if length(ChangeSpeedCost) < 10
+        ChangeSpeedCost = [ChangeSpeedCost, NaN(1, 10 - length(ChangeSpeedCost))];  % サイズを10x1に揃える
+    end
+   
+    
+    % 各時刻の値を1x5または1x10の行列にして格納
+    CruiseSpeedCostLog(end+1,:)    = CruiseSpeedCost;    %#ok<SAGROW>
+    FollowingSpeedCostLog(end+1,:) = FollowingSpeedCost; %#ok<SAGROW>
+    ChangeSpeedCostLog (end+1,:)   = ChangeSpeedCost;    %#ok<SAGROW>
+
+    %% 各時刻でモードごとのTimeを抽出
+    CruiseTimeCost = NaN(1,5);  % デフォルトはNaN、5列分のサイズに合わせる
+    FollowingTimeCost = NaN(1,5);  % デフォルトはNaN、5列分のサイズに合わせる
+    ChangeTimeCost = NaN(1,10);  % ここでは10列分のNaNを初期値として設定
+    
+    % "Cruise" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'Cruise'))
+        CruiseTimeCost = a.TimeCost(strcmp(a.Mode, 'Cruise'))';  % 該当する行を抽出
+    end
+    
+    % "Following" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'Follow'))
+        FollowingTimeCost = a.TimeCost(strcmp(a.Mode, 'Follow'))';  % 該当する行を抽出
+    end
+    
+    % "LaneChange" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'LaneChange'))
+        ChangeTimeCost = a.TimeCost(strcmp(a.Mode, 'LaneChange'))';  % 該当する行を抽出
+    end
+    
+
+     % それぞれのLatCostが必要な行列サイズ（5x1または10x1）であることを確認
+    % もし不足していればNaNで埋める
+    if length(CruiseTimeCost) < 5
+        CruiseTimeCost = [CruiseTimeCost, NaN(1, 5 - length(CruiseTimeCost))];  % サイズを5x1に揃える
+    end
+    
+    if length(FollowingTimeCost) < 5
+        FollowingTimeCost = [FollowingTimeCost, NaN(1, 5 - length(FollowingTimeCost))];  % サイズを5x1に揃える
+    end
+    
+    if length(ChangeTimeCost) < 10
+        ChangeTimeCost = [ChangeTimeCost, NaN(1, 10 - length(ChangeTimeCost))];  % サイズを10x1に揃える
+    end
+   
+    
+    % 各時刻の値を1x5または1x10の行列にして格納
+    CruiseTimeCostLog(end+1,:)    = CruiseTimeCost;    %#ok<SAGROW>
+    FollowingTimeCostLog(end+1,:) = FollowingTimeCost; %#ok<SAGROW>
+    ChangeTimeCostLog (end+1,:)   = ChangeTimeCost;    %#ok<SAGROW>
+
+
+     %% 各時刻でモードごとのTotalを抽出
+    CruiseTotalCost = NaN(1,5);  % デフォルトはNaN、5列分のサイズに合わせる
+    FollowingTotalCost = NaN(1,5);  % デフォルトはNaN、5列分のサイズに合わせる
+    ChangeTotalCost = NaN(1,10);  % ここでは10列分のNaNを初期値として設定
+    
+    % "Cruise" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'Cruise'))
+        CruiseTotalCost = a.TotalCost(strcmp(a.Mode, 'Cruise'))';  % 該当する行を抽出
+    end
+    
+    % "Following" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'Follow'))
+        FollowingTotalCost = a.TotalCost(strcmp(a.Mode, 'Follow'))';  % 該当する行を抽出
+    end
+    
+    % "LaneChange" モードがあれば、その時刻のLatCostを抽出
+    if any(strcmp(a.Mode, 'LaneChange'))
+        ChangeTotalCost = a.TotalCost(strcmp(a.Mode, 'LaneChange'))';  % 該当する行を抽出
+    end
+    
+
+     % それぞれのLatCostが必要な行列サイズ（5x1または10x1）であることを確認
+    % もし不足していればNaNで埋める
+    if length(CruiseTotalCost) < 5
+        CruiseTotalCost = [CruiseTotalCost, NaN(1, 5 - length(CruiseTotalCost))];  % サイズを5x1に揃える
+    end
+    
+    if length(FollowingTotalCost) < 5
+        FollowingTotalCost = [FollowingTotalCost, NaN(1, 5 - length(FollowingTotalCost))];  % サイズを5x1に揃える
+    end
+    
+    if length(ChangeTotalCost) < 10
+        ChangeTotalCost = [ChangeTotalCost, NaN(1, 10 - length(ChangeTotalCost))];  % サイズを10x1に揃える
+    end
+   
+    
+    % 各時刻の値を1x5または1x10の行列にして格納
+    CruiseTotalCostLog(end+1,:)    = CruiseTotalCost;    %#ok<SAGROW>
+    FollowingTotalCostLog(end+1,:) = FollowingTotalCost; %#ok<SAGROW>
+    ChangeTotalCostLog (end+1,:)   = ChangeTotalCost;    %#ok<SAGROW>
 
     %% --- シーン内の全アクターの予測軌道を衝突チェッカーに反映 --- %%
     for i = 1:numel(actorPoses)
@@ -212,91 +393,77 @@ while isRunning
     end
     updateObstaclePose(capList,actorID,actorPoses);
 
-    %% --- 同一レーンにいる最も近い前方車両との車間距離 --- %%
-    [EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardLog, gapBehindLog, timeLog, speedLog] ...
-         = ComputeGaps(EgoFrenetState, carLen, rearAxleRatio, refPath, AllActorGlobalState, ...
-         laneWidth, replanRate, numActors, gapForwardLog, gapBehindLog, leadIdxLog, behindIdxLog, timeLog, simStep, scenario, EgoGlobalState, speedLog);
 
 
-%% --- 車間距離も考慮した有効軌道選定 --- （ルールベースの部分）%%
-if minGap <= forwardsafetyGap
-    % forwardsafetyGapよりminGapが小さい場合，
-    % isValidの最初の5要素をFalseにする
-    isValid(1:min(5, numel(isValid))) = false;
-end
+    % --- 評価順序を決定 --- %%
+    [cost, idx] = sort(costTS);
+    optimalTrajectory = [];
+    
+    trajectoryEvaluation = nan(numel(isValid),1); % numelは要素数を返す
+    
 
+    % 車間距離も考慮した有効軌道選定（ルールベースの部分）
+    % if minGap < forwardsafetyGap 
+    %     % forwardsafetyGapよりminGapが小さい場合，isValidの最初の5要素をFalseにする
+    %     isValid(1:min(5, numel(isValid))) = false;
+    % end
+    
 
-%% --- 評価順序を決定 --- %%
-[cost, idx] = sort(costTS);
-optimalTrajectory = [];
-
-trajectoryEvaluation = nan(numel(isValid),1); % numelは要素数を返す
-
-
-% 最小コストから順に、各軌道の衝突をチェックする。
-for i = 1:numel(idx)
-    if isValid(idx(i))
-        % エゴオブジェクトの候補軌道でカプセルリストを更新する。
-        egoPoses.States = globalTraj(idx(i)).Trajectory(:,1:3);
-        updateEgoPose(capList,egoID,egoPoses);
-
-        % 衝突をチェックする。
-        isColliding = checkCollision(capList);
-
-        if all(~isColliding)
-            % 衝突が検出されない場合、これが最適軌道である。
-            trajectoryEvaluation(idx(i)) = 1;
-            optimalTrajectory = globalTraj(idx(i)).Trajectory;
-            % disp('Frenet系での自車両の状態'); % 0s後のものになっている
-            % disp(EgoFrenetState);
-            % disp(gapForwardLog);
-            disp('自車のフロント'); % 0s後のものになってる
-            disp(EgoFrenetFront);
-            disp('他車のリア'); % 0.1s後のものになってる
-            disp(AllActorFrenetRear);
-            disp(['前方車間距離: ' num2str(minGap) ' m']); % 0sと0.1sのミックス
-            % disp('curA'); % 0.1s後のものになってる
-            % disp(AllActorFrenetState);
-            disp('有効性');
-            disp(isValid);
-            break;
-        else
-            trajectoryEvaluation(idx(i)) = 0;
+    % 最小コストから順に、各軌道の衝突をチェックする。
+    for i = 1:numel(idx)
+        if isValid(idx(i))
+            % エゴオブジェクトの候補軌道でカプセルリストを更新する。
+            egoPoses.States = globalTraj(idx(i)).Trajectory(:,1:3);
+            updateEgoPose(capList,egoID,egoPoses);
+    
+            % 衝突をチェックする。
+            isColliding = checkCollision(capList);
+    
+            if all(~isColliding)
+                % 衝突が検出されない場合、これが最適軌道である。
+                trajectoryEvaluation(idx(i)) = 1;
+                optimalTrajectory = globalTraj(idx(i)).Trajectory;
+                
+                break;
+            else
+                trajectoryEvaluation(idx(i)) = 0;
+            end
         end
     end
-end
+
+    
  
-%% === 選定モードを決定し、ログ化 === %%
-% （Tdisp を作る前に modeCol を確定させる）
-selectedIdx = find(trajectoryEvaluation==1, 1);  % 最初に有効と判定された候補
-
-selLabel = "";           % 既定値（未選定）
-onehot   = [0 0 0];      % [Cruise, Follow, LaneChange]
-
-if ~isempty(selectedIdx)
-    selLabel = labels(selectedIdx);  % "Cruise" / "Follow" / "LaneChange"
-
-    % one-hot 化（順序は [Cruise, Follow, LaneChange] で固定）
-    switch selLabel
-        case "Cruise"
-            onehot = [1 0 0];
-        case "Follow"
-            onehot = [0 2 0];
-        case "LaneChange"
-            onehot = [0 0 3];
-        otherwise
-            onehot = [0 0 0];
+    %% === 選定モードを決定し、ログ化 === %%
+    % （Tdisp を作る前に modeCol を確定させる）
+    selectedIdx = find(trajectoryEvaluation==1, 1);  % 最初に有効と判定された候補
+    
+    selLabel = "";           % 既定値（未選定）
+    onehot   = [0 0 0];      % [Cruise, Follow, LaneChange]
+    
+    if ~isempty(selectedIdx)
+        selLabel = Labels(selectedIdx);  % "Cruise" / "Follow" / "LaneChange"
+    
+        % one-hot 化（順序は [Cruise, Follow, LaneChange] で固定）
+        switch selLabel
+            case "Cruise"
+                onehot = [1 0 0];
+            case "Follow"
+                onehot = [0 2 0];
+            case "LaneChange"
+                onehot = [0 0 3];
+            otherwise
+                onehot = [0 0 0];
+        end
     end
-end
+    
+    % --- 時刻歴ログに追記 ---
+    % modeTimeLog(end+1,1)  = (simStep-1)*scenario.SampleTime; %#ok<SAGROW>
+    modeLabelLog(end+1,1) = selLabel;                        %#ok<SAGROW>
+    modeBinLog(end+1,:)   = onehot;                          %#ok<SAGROW>
+    
 
-% --- 時刻歴ログに追記 ---
-modeTimeLog(end+1,1)  = (simStep-1)*scenario.SampleTime; %#ok<SAGROW>
-modeLabelLog(end+1,1) = selLabel;                        %#ok<SAGROW>
-modeBinLog(end+1,:)   = onehot;                          %#ok<SAGROW>
-
-%% --- サンプリングされた軌跡を表示--- %%
+    %% --- サンプリングされた軌跡を表示--- %%
     lineHandles = VisualizeScene(lineHandles,globalTraj,isValid,trajectoryEvaluation);
-
 
     hold on;
     show(capList,'TimeStep',1:capList.MaxNumSteps,'FastUpdate',1);
@@ -349,6 +516,279 @@ close(videoWriter);
 fprintf('Simulation video saved to: %s\n', videoFile);
 
 
+%% 横偏差コストのグラフ
+figName = fullfile(pwd, 'LateralCost.png');
+
+if ~isempty(timeLog)
+    hFig = figure('Name','LateralCost','NumberTitle','off');
+    clf(hFig); hold on; grid on;
+
+    % CruiseLatCostLog, FollowingLatCostLog, ChangeLatCostLog の各列をプロット
+    for col = 1:size(CruiseLatCostLog, 2)  % 各列に対してプロット
+        % NaN でないデータのみをプロット
+        validCruiseLatData = ~isnan(CruiseLatCostLog(:, col));  % NaNでないデータを選択
+        validFollowLatData = ~isnan(FollowingLatCostLog(:, col));  % NaNでないデータを選択
+        validChangeLatData = ~isnan(ChangeLatCostLog(:, col));  % NaNでないデータを選択
+
+        if any(validCruiseLatData)
+            plot(timeLog(validCruiseLatData), CruiseLatCostLog(validCruiseLatData, col), '-', 'Color', 'r', 'LineWidth', 1.5);
+        end
+        if any(validFollowLatData)
+            plot(timeLog(validFollowLatData), FollowingLatCostLog(validFollowLatData, col), '--', 'Color', 'b', 'LineWidth', 1.5);
+        end
+        if any(validChangeLatData)
+            plot(timeLog(validChangeLatData), ChangeLatCostLog(validChangeLatData, col), '--', 'Color', 'g', 'LineWidth', 1.5);
+        end
+    end
+
+    % 軸・タイトル
+    hX = xlabel('Time (s)');
+    hY = ylabel('LateralCost');
+    hT = title('LateralCost Log');
+
+    % 縦軸範囲
+    xlim([0 max(timeLog)]);
+    ylim([-0.1 0.1]);
+
+    % 凡例
+    hLeg = legend({'Cruise Mode', 'Following Mode', 'LaneChange Mode'}, 'Location', 'northeast');
+
+    % フォント設定
+    set([hX, hY, hT], 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(hLeg, 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', 14);
+    % 枠線を黒に設定
+    % set(gca, 'Box', 'on', 'LineWidth', 1, 'EdgeColor', 'k');
+
+
+    hold off;
+    drawnow;
+
+    try
+        saveas(hFig, figName);
+        fprintf('Lateral Cost plot saved to: %s\n', figName);
+    catch
+        warning('Failed to save LateralCost plot to %s', figName);
+    end
+else
+    % データなしの場合
+    hFig = figure('Name', 'LateralCost (no data)', 'NumberTitle', 'off');
+    clf(hFig);
+    text(0.1, 0.5, 'No lateral cost data was logged during the simulation.', ...
+        'FontSize', 12, 'FontName', 'Times New Roman');
+    axis off;
+
+    try
+        saveas(hFig, figName);
+        fprintf('No LateralCost plot saved to: %s\n', figName);
+    catch
+        warning('Failed to save no LateralCost plot to %s', figName);
+    end
+end
+
+%% 速度差コストのグラフ
+figName = fullfile(pwd, 'SpeedCost.png');
+
+if ~isempty(timeLog)
+    hFig = figure('Name','SpeedCost','NumberTitle','off');
+    clf(hFig); hold on; grid on;
+
+    % CruiseSpeedCostLog, FollowingSpeedCostLog, ChangeSpeedCostLog の各列をプロット
+    for col = 1:size(CruiseSpeedCostLog, 2)  % 各列に対してプロット
+        % NaN でないデータのみをプロット
+        validCruiseSpeedData = ~isnan(CruiseSpeedCostLog(:, col));  % NaNでないデータを選択
+        validFollowSpeedData = ~isnan(FollowingSpeedCostLog(:, col));  % NaNでないデータを選択
+        validChangeSpeedData = ~isnan(ChangeSpeedCostLog(:, col));  % NaNでないデータを選択
+
+        if any(validCruiseLatData)
+            plot(timeLog(validCruiseSpeedData), CruiseSpeedCostLog(validCruiseSpeedData, col), '--', 'Color', 'r', 'LineWidth', 1.5);
+        end
+        if any(validFollowLatData)
+            plot(timeLog(validFollowSpeedData), FollowingSpeedCostLog(validFollowSpeedData, col), '--', 'Color', 'b', 'LineWidth', 1.5);
+        end
+        if any(validChangeLatData)
+            plot(timeLog(validChangeSpeedData), ChangeSpeedCostLog(validChangeSpeedData, col), '--', 'Color', 'g', 'LineWidth', 1.5);
+        end
+    end
+
+    % 軸・タイトル
+    hX = xlabel('Time (s)');
+    hY = ylabel('SpeedCost');
+    hT = title('SpeedCost Log');
+
+    % 縦軸範囲
+    xlim([0 max(timeLog)]);
+    ylim([-0.1 0.6]);
+
+    % 凡例
+    hLeg = legend({'Cruise Mode', 'Following Mode', 'LaneChange Mode'}, 'Location', 'northeast');
+
+    % フォント設定
+    set([hX, hY, hT], 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(hLeg, 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', 14);
+    % set(gca, 'Box', 'on', 'LineWidth', 1, 'EdgeColor', 'k');
+
+    hold off;
+    drawnow;
+
+    try
+        saveas(hFig, figName);
+        fprintf('Speed Cost plot saved to: %s\n', figName);
+    catch
+        warning('Failed to save SpeedCost plot to %s', figName);
+    end
+else
+    % データなしの場合
+    hFig = figure('Name', 'SpeedCost (no data)', 'NumberTitle', 'off');
+    clf(hFig);
+    text(0.1, 0.5, 'No Speed cost data was logged during the simulation.', ...
+        'FontSize', 12, 'FontName', 'Times New Roman');
+    axis off;
+
+    try
+        saveas(hFig, figName);
+        fprintf('No SpeedCost plot saved to: %s\n', figName);
+    catch
+        warning('Failed to save no SpeedCost plot to %s', figName);
+    end
+end
+
+%% 時間差コストのグラフ
+figName = fullfile(pwd, 'TimeCost.png');
+
+if ~isempty(timeLog)
+    hFig = figure('Name','TimeCost','NumberTitle','off');
+    clf(hFig); hold on; grid on;
+
+    % CruiseTimeCostLog, FollowingTimeCostLog, ChangeTimeCostLog の各列をプロット
+    for col = 1:size(CruiseTimeCostLog, 2)  % 各列に対してプロット
+        % NaN でないデータのみをプロット
+        validCruiseTimeData = ~isnan(CruiseTimeCostLog(:, col));  % NaNでないデータを選択
+        validFollowTimeData = ~isnan(FollowingTimeCostLog(:, col));  % NaNでないデータを選択
+        validChangeTimeData = ~isnan(ChangeTimeCostLog(:, col));  % NaNでないデータを選択
+
+        if any(validCruiseTimeData)
+            plot(timeLog(validCruiseTimeData), CruiseTimeCostLog(validCruiseTimeData, col), '-', 'Color', 'r', 'LineWidth', 1.5);
+        end
+        if any(validFollowTimeData)
+            plot(timeLog(validFollowTimeData), FollowingTimeCostLog(validFollowTimeData, col), '--', 'Color', 'b', 'LineWidth', 1.5);
+        end
+        if any(validChangeTimeData)
+            plot(timeLog(validChangeTimeData), ChangeTimeCostLog(validChangeTimeData, col), '--', 'Color', 'g', 'LineWidth', 1.5);
+        end
+    end
+
+    % 軸・タイトル
+    hX = xlabel('Time (s)');
+    hY = ylabel('TimeCost');
+    hT = title('TimeCost Log');
+
+    % 縦軸範囲
+    xlim([0 max(timeLog)]);
+    ylim([0 0.3]);
+
+    % 凡例
+    hLeg = legend({'Cruise Mode', 'Following Mode', 'LaneChange Mode'}, 'Location', 'northeast');
+
+    % フォント設定
+    set([hX, hY, hT], 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(hLeg, 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', 14);
+    % set(gca, 'Box', 'on', 'LineWidth', 1, 'EdgeColor', 'k');
+
+    hold off;
+    drawnow;
+
+    try
+        saveas(hFig, figName);
+        fprintf('Time Cost plot saved to: %s\n', figName);
+    catch
+        warning('Failed to save TimeCost plot to %s', figName);
+    end
+else
+    % データなしの場合
+    hFig = figure('Name', 'TimeCost (no data)', 'NumberTitle', 'off');
+    clf(hFig);
+    text(0.1, 0.5, 'No Time cost data was logged during the simulation.', ...
+        'FontSize', 12, 'FontName', 'Times New Roman');
+    axis off;
+
+    try
+        saveas(hFig, figName);
+        fprintf('No TimeCost plot saved to: %s\n', figName);
+    catch
+        warning('Failed to save no TimeCost plot to %s', figName);
+    end
+end
+
+%% トータルコストのグラフ
+figName = fullfile(pwd, 'TotalCost.png');
+
+if ~isempty(timeLog)
+    hFig = figure('Name','TotalCost','NumberTitle','off');
+    clf(hFig); hold on; grid on;
+
+    % CruiseTotalCostLog, FollowingTotalCostLog, ChangeTotalCostLog の各列をプロット
+    for col = 1:size(CruiseTotalCostLog, 2)  % 各列に対してプロット
+        % NaN でないデータのみをプロット
+        validCruiseTotalData = ~isnan(CruiseTotalCostLog(:, col));  % NaNでないデータを選択
+        validFollowTotalData = ~isnan(FollowingTotalCostLog(:, col));  % NaNでないデータを選択
+        validChangeTotalData = ~isnan(ChangeTotalCostLog(:, col));  % NaNでないデータを選択
+
+        if any(validCruiseTotalData)
+            plot(timeLog(validCruiseTotalData), CruiseTotalCostLog(validCruiseTotalData, col), '--', 'Color', 'r', 'LineWidth', 1.5);
+        end
+        if any(validFollowTotalData)
+            plot(timeLog(validFollowTotalData), FollowingTotalCostLog(validFollowTotalData, col), '--', 'Color', 'b', 'LineWidth', 1.5);
+        end
+        if any(validChangeTotalData)
+            plot(timeLog(validChangeTotalData), ChangeTotalCostLog(validChangeTotalData, col), '--', 'Color', 'g', 'LineWidth', 1.5);
+        end
+    end
+
+    % 軸・タイトル
+    hX = xlabel('Time (s)');
+    hY = ylabel('TotalCost');
+    hT = title('TotalCost Log');
+
+    % 縦軸範囲
+    xlim([0 max(timeLog)]);
+    ylim([0 0.8]);
+
+    % 凡例
+    hLeg = legend({'Cruise Mode', 'Following Mode', 'LaneChange Mode'}, 'Location', 'northeast');
+
+    % フォント設定
+    set([hX, hY, hT], 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(hLeg, 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', 14);
+    % set(gca, 'Box', 'on', 'LineWidth', 1, 'EdgeColor', 'k');
+
+    hold off;
+    drawnow;
+
+    try
+        saveas(hFig, figName);
+        fprintf('Total Cost plot saved to: %s\n', figName);
+    catch
+        warning('Failed to save Total Cost plot to %s', figName);
+    end
+else
+    % データなしの場合
+    hFig = figure('Name', 'Total Cost (no data)', 'NumberTitle', 'off');
+    clf(hFig);
+    text(0.1, 0.5, 'No Total cost data was logged during the simulation.', ...
+        'FontSize', 12, 'FontName', 'Times New Roman');
+    axis off;
+
+    try
+        saveas(hFig, figName);
+        fprintf('No Total Cost plot saved to: %s\n', figName);
+    catch
+        warning('Failed to save no Total Cost plot to %s', figName);
+    end
+end
 %% --- 車間距離のログ ---%%
 figName = fullfile(pwd, 'gap_plot.png');
 
@@ -421,14 +861,14 @@ if ~isempty(timeLog)
     hX2 = xlabel('Time (s)');
     hY2 = ylabel('Speed (m/s)');
     hT2 = title('Ego vehicle speed');
-    hLeg2 = legend(hSpeed, {'Ego speed'}, 'Location','best');
+    hLeg2 = legend(hSpeed, {'Ego speed'}, 'Location','northeast');
     set([hX2,hY2,hT2],'FontName','Times New Roman','FontSize',9);
     set(hLeg2,'FontName','Times New Roman','FontSize',14);
     set(gca,'FontName','Times New Roman','FontSize',14);
     % 表示範囲: 速度を 15 m/s から 20 m/s の範囲で表示
     try
-        ylim([0 25]);
-        yticks(0:1:25);
+        ylim([6 20]);
+        yticks(6:2:20);
     catch
         % 一部の環境で ylim 設定が失敗する場合は無視して続行
     end
@@ -479,8 +919,8 @@ if ~isempty(timeLog) && ~isempty(yawLog)
     set(gca,'FontName','Times New Roman','FontSize',14);
 
     % 表示範囲
-    try
-        ylim auto; % 必要に応じて調整可
+    try 
+        ylim([-5 5]);
     catch
     end
 
@@ -541,27 +981,27 @@ end
 %% --- 選定モード（Cruise/Follow/LaneChange）0/1 時系列プロット --- %%
 modeFigName = fullfile(pwd, 'mode_plot.png');
 
-if ~isempty(modeTimeLog)
+if ~isempty(timeLog)
     hFig4 = figure('Name','Selected Mode','NumberTitle','off'); 
     clf(hFig4); grid on; hold on;
 
     % 0/1 の階段状に見せたいので stairs を使用
-    hCruise     = stairs(modeTimeLog, modeBinLog(:,1), 'Color', 'r', 'LineStyle', ':','LineWidth', 1.5);
-    hFollow     = stairs(modeTimeLog, modeBinLog(:,2), 'Color', 'b', 'LineStyle', ':','LineWidth', 1.5);
-    hLaneChange = stairs(modeTimeLog, modeBinLog(:,3), 'Color', [0 0.4 0], 'LineStyle', ':', 'LineWidth', 1.5);
+    hCruise     = stairs(timeLog, modeBinLog(:,1), 'Color', 'r', 'LineStyle', ':','LineWidth', 1.5);
+    hFollow     = stairs(timeLog, modeBinLog(:,2), 'Color', 'b', 'LineStyle', ':','LineWidth', 1.5);
+    hLaneChange = stairs(timeLog, modeBinLog(:,3), 'Color', [0 0.4 0], 'LineStyle', ':', 'LineWidth', 1.5);
   
 
     xlabel('Time (s)');
     ylabel('Mode');
     title('Selected Mode');
     legend([hCruise, hFollow, hLaneChange], {'Cruise','Follow','LaneChange'}, 'Location','best');
-    ylim([-0.1 3.1]);
+    ylim([0 3.5]);
 
     set(gca,'FontName','Times New Roman','FontSize',14);
     saveas(hFig4, modeFigName);
     fprintf('Mode plot saved to: %s\n', modeFigName);
+end
     
-
 
 
 
@@ -686,87 +1126,49 @@ if ~isempty(timeLog) && ~isempty(yawLog)
 
     close(v);
     disp('✅ Yaw + red bar video saved.');
+end
 
-    %% ==== 横方向加速度（Lateral Acceleration） ====
-    if ~isempty(timeLog) && ~isempty(latAccLog)
-        v = VideoWriter('lateral_acc_bar.mp4', 'MPEG-4');
-        v.FrameRate = 10; open(v);
-    
-        fig = figure('Name','Lateral Acceleration with Red Bar','NumberTitle','off');
-        clf(fig); hold on; grid on;
-    
-        plot(timeLog, latAccLog, 'k-', 'LineWidth', 2);
-        yline(2.5, 'r--', 'LineWidth', 2);
-        yline(-2.5,'r--', 'LineWidth', 2);
-    
-        xlabel('Time (s)');
-        ylabel('Lateral Acceleration (m/s^2)');
-        title('Ego Vehicle Lateral Acceleration');
-        ylim([-5 5]);
-        xlim([min(timeLog) max(timeLog)]);
-    
-        set(gca,'FontName','Times New Roman','FontSize',14);
-        barLine = xline(timeLog(1), 'r-', 'LineWidth', 2);
-    
-        for i = 1:length(timeLog)
-            set(barLine, 'Value', timeLog(i));
-            title(sprintf('Lateral Acc (t = %.2f s)', timeLog(i)));
-            frame = getframe(fig);
-            writeVideo(v, frame);
-        end
-    
-        close(v);
-        disp('✅ Lateral acceleration + red bar video saved.');
+%% ==== 横方向加速度（Lateral Acceleration） ====
+if ~isempty(timeLog) && ~isempty(latAccLog)
+    v = VideoWriter('lateral_acc_bar.mp4', 'MPEG-4');
+    v.FrameRate = 10; open(v);
+
+    fig = figure('Name','Lateral Acceleration with Red Bar','NumberTitle','off');
+    clf(fig); hold on; grid on;
+
+    plot(timeLog, latAccLog, 'k-', 'LineWidth', 2);
+
+    xlabel('Time (s)');
+    ylabel('Lateral Acceleration (m/s^2)');
+    title('Ego Vehicle Lateral Acceleration');
+    ylim([-5 5]);
+    xlim([min(timeLog) max(timeLog)]);
+
+    set(gca,'FontName','Times New Roman','FontSize',14);
+    barLine = xline(timeLog(1), 'r-', 'LineWidth', 2);
+
+    for i = 1:length(timeLog)
+        set(barLine, 'Value', timeLog(i));
+        title(sprintf('Lateral Acc (t = %.2f s)', timeLog(i)));
+        frame = getframe(fig);
+        writeVideo(v, frame);
     end
 
+    close(v);
+    disp('✅ Lateral acceleration + red bar video saved.');
 end
 
 %% ==== 走行モード（Mode） ====
-% if ~isempty(modeTimeLog)
-%     v = VideoWriter('mode_bar.mp4', 'MPEG-4');
-%     v.FrameRate = 10; open(v);
-%     fig = figure('Name','Mode with Red Bar','NumberTitle','off'); clf(fig); hold on; grid on;
-% 
-%     % --- プロット ---
-%     hCruise = stairs(modeTimeLog, modeBinLog(:,1), 'r:', 'LineWidth', 2, 'DisplayName', 'Cruise');
-%     hFollow = stairs(modeTimeLog, modeBinLog(:,2), 'b:', 'LineWidth', 2, 'DisplayName', 'Follow');
-%     hLane   = stairs(modeTimeLog, modeBinLog(:,3), 'Color', [0 0.4 0], 'LineStyle', ':', 'LineWidth', 2, 'DisplayName', 'LaneChange');
-% 
-% 
-%     % --- 軸・凡例・フォント設定 ---
-%     xlabel('Time (s)'); ylabel('Mode');
-%     title('Mode Transition Over Time');
-%     legend([hCruise, hFollow, hLane], {'Cruise','Follow','LaneChange'}, ...
-%         'Location','northeast', 'FontName','Times New Roman','FontSize',14);
-%     axis([min(modeTimeLog) max(modeTimeLog) -0.1 3.1]);
-%     set(gca,'FontName','Times New Roman','FontSize',14);
-%     set(findall(gca,'Type','text'),'FontName','Times New Roman');
-% 
-%     % --- 赤バー ---
-%     barLine = xline(modeTimeLog(1), 'r-', 'LineWidth', 2);
-% 
-%     % --- アニメーション ---
-%     timeFrames = timeLog;
-%     for i = 1:length(timeFrames)
-%         set(barLine, 'Value', timeFrames(i));
-%         title(sprintf('Mode Transition (t = %.2f s)', timeFrames(i)), 'FontName','Times New Roman','FontSize',14);
-%         frame = getframe(fig); writeVideo(v, frame);
-%     end
-%     close(v);
-%     disp('✅ Mode + red bar video saved.');
-% end
-
-%% ==== 走行モード（Mode） ====
-if ~isempty(modeTimeLog)
+if ~isempty(timeLog)
     v = VideoWriter('mode_bar.mp4', 'MPEG-4');
     v.FrameRate = 10; open(v);
     fig = figure('Name','Mode with Red Bar','NumberTitle','off'); 
     clf(fig); hold on; grid on;
 
     % --- プロット ---
-    hCruise = stairs(modeTimeLog, modeBinLog(:,1), 'r:', 'LineWidth', 2);
-    hFollow = stairs(modeTimeLog, modeBinLog(:,2), 'b:', 'LineWidth', 2);
-    hLane   = stairs(modeTimeLog, modeBinLog(:,3), 'Color', [0 0.4 0], ...
+    hCruise = stairs(timeLog, modeBinLog(:,1), 'r:', 'LineWidth', 2);
+    hFollow = stairs(timeLog, modeBinLog(:,2), 'b:', 'LineWidth', 2);
+    hLane   = stairs(timeLog, modeBinLog(:,3), 'Color', [0 0.4 0], ...
                      'LineStyle', ':', 'LineWidth', 2);
 
     % --- 軸・凡例・フォント設定 ---
@@ -774,7 +1176,7 @@ if ~isempty(modeTimeLog)
     ylabel('Mode');
     title('Mode Transition Over Time');
     ylim([0 4]); % 縦軸の範囲を0〜4に設定
-    xlim([min(modeTimeLog) max(modeTimeLog)]); % 横軸をデータ範囲に設定
+    xlim([min(timeLog) max(timeLog)]); % 横軸をデータ範囲に設定
 
     % --- 凡例（data1などを排除して手動指定） ---
     legend([hCruise, hFollow, hLane], ...
@@ -786,10 +1188,10 @@ if ~isempty(modeTimeLog)
     set(findall(gca,'Type','text'),'FontName','Times New Roman');
 
     % --- 赤バー ---
-    barLine = xline(modeTimeLog(1), 'r-', 'LineWidth', 2);
+    barLine = xline(timeLog(1), 'r-', 'LineWidth', 2);
 
     % --- アニメーション ---
-    timeFrames = modeTimeLog;
+    timeFrames = timeLog;
     for i = 1:length(timeFrames)
         set(barLine, 'Value', timeFrames(i));
         title(sprintf('Mode Transition (t = %.2f s)', timeFrames(i)), ...
@@ -800,10 +1202,6 @@ if ~isempty(modeTimeLog)
 
     close(v);
     disp('✅ Mode + red bar video saved.');
-end
-
-
-
 
 else
     warning('No mode data was logged.');
