@@ -27,6 +27,7 @@ sccprj/
 *.slxc
 *.slx.autosave
 *.autosave
+*.csv
 
 # Simulink Project ファイル
 *.slpj
