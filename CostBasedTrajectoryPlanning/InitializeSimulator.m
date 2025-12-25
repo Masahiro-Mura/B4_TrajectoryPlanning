@@ -9,7 +9,7 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     futureTrajectory = repelem(struct('Trajectory',[]),numActors,1);
     
 
-    egoState = frenet2global(refPath,[67 18 0 laneWidth*0 0 0]); 
+    egoState = frenet2global(refPath,[45 18 0 laneWidth 0 0]); 
     
     
     % Retrieve pose struct from dynamicCapsuleList for all actors and ego car
@@ -19,7 +19,7 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     stepPerUpdate = (1/replanRate)/scenarioObj.SampleTime;
    
     
-    viewer = scenario_20251223;
+    viewer = scenario_20251211;
 
     viewer.SampleTime = scenarioObj.SampleTime;
   

@@ -1,14 +1,14 @@
-function [EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardLog, gapBehindLog, timeLog, speedLog] ...
+function [AllActorFrenetState, EgoFrenetFront, EgoFrenetRear, AllActorFrenetFront, AllActorFrenetRear, ForwardGap, RearGap, gapForwardLog, gapBehindLog, timeLog, speedLog] ...
          = ComputeGaps(EgoFrenetState, carLen, rearAxleRatio, refPath, AllActorGlobalState, ...
-         laneWidth, numActors, gapForwardLog, gapBehindLog, leadIdxLog, behindIdxLog, timeLog, simStep, scenario, EgoGlobalState, speedLog);
+         laneWidth, numActors, gapForwardLog, gapBehindLog, leadIdxLog, behindIdxLog, timeLog, simStep, scenario, EgoGlobalState, speedLog)
 
     EgoFrenetFront = EgoFrenetState(1) + carLen*(1-rearAxleRatio);
     EgoFrenetRear  = EgoFrenetState(1) - carLen*rearAxleRatio;
     
     AllActorFrenetState = global2frenet(refPath,AllActorGlobalState);
   
-    AllActorFrenetFront = AllActorFrenetState(:,1) + carLen*(1-rearAxleRatio);
-    AllActorFrenetRear  = AllActorFrenetState(:,1) - carLen*rearAxleRatio;
+    AllActorFrenetFront = AllActorFrenetState(:,1) + carLen * (1-rearAxleRatio);
+    AllActorFrenetRear  = AllActorFrenetState(:,1) - carLen * rearAxleRatio;
 
     EgoLaneNum = PredictLane(EgoFrenetState, laneWidth, 0);
 
@@ -25,10 +25,10 @@ function [EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardL
     % 最も近い車両の選定
     validIdx = find(~isnan(FrontGaps)); % ~isnanは論理否定演算子，NaN出ない要素番号を返す
     if ~isempty(validIdx)
-        [minGap, relIdx] = min(FrontGaps(validIdx));
+        [ForwardGap, relIdx] = min(FrontGaps(validIdx));
         forwardactorIdx = validIdx(relIdx);
     else
-        minGap = nan;
+        ForwardGap = nan;
         forwardactorIdx = nan;
     end
 
@@ -47,17 +47,17 @@ function [EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardL
     % 最も近い車両の選定
     validRear = find(~isnan(RearGaps));
     if ~isempty(validRear)
-        [minRearGap, relRearIdx] = min(RearGaps(validRear));
+        [RearGap, relRearIdx] = min(RearGaps(validRear));
         behindActorIdx = validRear(relRearIdx);
     else
-        minRearGap = nan;
+        RearGap = nan;
         behindActorIdx = nan;
     end
 
 
     
-    gapForwardLog(end+1,1) = minGap;          
-    gapBehindLog(end+1,1) = minRearGap;            
+    gapForwardLog(end+1,1) = ForwardGap;          
+    gapBehindLog(end+1,1) = RearGap;            
     leadIdxLog(end+1,1) = forwardactorIdx;          
     behindIdxLog(end+1,1) = behindActorIdx;        
     timeLog(end+1,1) = (simStep-1)*scenario.SampleTime;  

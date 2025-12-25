@@ -35,3 +35,4 @@ function [curState, futureTrajectory, isRunning] = RetrieveActorGroundTruth(scen
         curState(i,:) = futureTrajectory(i).Trajectory(1,:);
     end
 end
+

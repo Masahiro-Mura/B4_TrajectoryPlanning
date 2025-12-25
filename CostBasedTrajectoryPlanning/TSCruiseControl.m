@@ -1,4 +1,5 @@
-function [terminalStates, times, leadGaps] = TSCruiseControl(refPath, laneWidth, egoState, targetVelocity, dt, AllActorGlobalState)
+function [terminalStates, times, leadGaps, behindGaps] = ...
+TSCruiseControl(refPath, laneWidth, egoState, targetVelocity, dt, AllActorGlobalState)
 
     % Convert ego to Frenet and predict lane offsets for each horizon
     frenetState = global2frenet(refPath, egoState);
@@ -14,18 +15,27 @@ function [terminalStates, times, leadGaps] = TSCruiseControl(refPath, laneWidth,
     terminalStates(:,4) = lateralOffsets;
     times = dt(:);
 
-    % Compute predicted lead-vehicle gaps for each prediction horizon.
-    % If actor information is not provided, return +inf (no lead).
+    % 先行車 / 後方車との距離計算
     if nargin < 6 || isempty(AllActorGlobalState)
         leadGaps = inf(numel(dt),1);
+        behindGaps = inf(numel(dt),1);
     else
-        % Reuse TSObstacleDistances which maps timeHorizons -> allDT
+        % 先行車との距離
         try
-            leadGaps = TSObstacleDistances(refPath, egoState, AllActorGlobalState, laneWidth, dt(:)', dt(:)');
+            leadGaps = TSForwardObstacleDistances(refPath, egoState, AllActorGlobalState, laneWidth, dt(:)', dt(:)');
         catch
             % If something goes wrong, fall back to inf to avoid breaking caller
             leadGaps = inf(numel(dt),1);
         end
         leadGaps = leadGaps(:);
+
+        % 後方車との距離
+        try
+            behindGaps = TSBehindObstacleDistances(refPath, egoState, AllActorGlobalState, laneWidth, dt(:)', dt(:)');
+        catch
+            % If something goes wrong, fall back to inf to avoid breaking caller
+            behindGaps = inf(numel(dt),1);
+        end
+        behindGaps = behindGaps(:);
     end
 end

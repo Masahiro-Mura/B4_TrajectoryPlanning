@@ -1,6 +1,8 @@
+%% ===== メインコード ===== %%
+
 clc; clear; close all;
 addpath('..\Scenario\m_file\');
-scenario = scenario_20251223;
+scenario = scenario_20251211;
 
 % デフォルトの車両プロパティ
 carLen   = 4.7; 
@@ -9,7 +11,7 @@ rearAxleRatio = 0.25;
 laneWidth   = carWidth*2;
 
 plot(scenario);
-waypoints = [0 0; 800 0]; 
+waypoints = [0 0; 1000 0]; 
 refPath = referencePathFrenet(waypoints); 
 
 connector = trajectoryGeneratorFrenet(refPath);
@@ -45,11 +47,14 @@ timeHorizons = 3:0.5:5; % [sec]
 maxHorizon = max(timeHorizons); % [sec] 
 
 % コストパラメータの定義
-LatWeight         =  0.5;  % 横偏差の重み
-TimeWeight        =  0.5;  % 時間コストの重み
-SpeedWeight       =  1.0;  % 速度差コストの重み
-LongSafetyWeight  =  6.0;  % 縦方向安全コストの重み
-c1                =  0.05;  % c1 はチューニングパラメータ（0.05〜0.2くらいで調整してみる）
+LatWeight           = 1.5;  % 横偏差の重み
+TimeWeight          = 20;  % 時間コストの重み
+SpeedWeight         = 10;  % 速度差コストの重み
+ForwardSafetyWeight = 11;  % 前方向安全コストの重み
+BehindSafetyWeight  = 5;  % 後方向安全コストの重み
+
+% 距離コスト計算用
+c1                =  2.8;  % c1 はチューニングパラメータ（0.05〜0.2くらいで調整してみる）
 
 % 以下の制約に違反する軌道を排除
 maxAcceleration = 3; 
@@ -71,11 +76,11 @@ behindsafetyGap = 12;
 %% ログボックス
 % --- prepare logging for longitudinal gap to the nearest forward vehicle ---
 numActors = numel(actorID);
-gapForwardLog = [];        % rows: timesteps, single column: nearest lead gap (m)
+gapForwardLog = []; % rows: timesteps, single column: nearest lead gap (m)
 gapBehindLog = [];  % rows: timesteps, single column: nearest behind gap (m)
 leadIdxLog = [];    % store which actor was the nearest lead (optional)
 behindIdxLog = [];  % store which actor was the nearest behind (optional)
-timeLog = [];
+timeLog = [];       % time log
 speedLog = [];      % rows: timesteps, single column: ego speed (m/s)
 simStep = 0;
 
@@ -133,27 +138,27 @@ while isRunning
     %% アクター車両の現在の状態と計画ホライズンにわたる軌跡を取得する。
     [AllActorGlobalState,futureTrajectory,isRunning] = ...
         RetrieveActorGroundTruth(scenario,futureTrajectory,replanRate,maxHorizon);
-    
 
+    
+    
 
     %% ===== 軌道計算 ===== %%
     % 巡航制御の状態を生成 ＋ 先行車両との車間距離
-    [termStatesCC,timesCC,leadGapsCC] = TSCruiseControl(...
+    [termStatesCC,timesCC,leadGapsCC, behindGapsCC] = TSCruiseControl(...
         refPath,laneWidth,EgoGlobalState,SpeedLimit,timeHorizons, AllActorGlobalState);
+
 
   
     % 前方車追従の状態を生成（追加出力: 各予測秒数ごとの先行車との車間距離 5x1）
-    [termStatesF,timesF,leadGapsF] = TSLeadVehicleFollow(...
+    [termStatesF,timesF,leadGapsF, behindGapsF] = TSLeadVehicleFollow(...
         refPath,laneWidth,forwardsafetyGap,EgoGlobalState,AllActorGlobalState,carLen, rearAxleRatio, timeHorizons);
 
 
       % 車線変更の状態を生成
-    % [termStatesLC,timesLC] = TSLaneChange(...
-    % refPath, laneWidth, forwardsafetyGap, behindsafetyGap, ...
-    % EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, SpeedLimit, timeHorizons);
-    [termStatesLC, timesLC, leadGapsLC] = TSLaneChange( ...
+    [termStatesLC, timesLC, leadGapsLC, behindGapsLC] = TSLaneChange( ...
     refPath, laneWidth, forwardsafetyGap, behindsafetyGap, ...
     EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, SpeedLimit, timeHorizons);
+
    
 
     % 終端状態をまとめる
@@ -162,8 +167,9 @@ while isRunning
               repmat("LaneChange", size(termStatesLC,1), 1)
              ];
     AllTime = [timesCC; timesF; timesLC];
-    AllGaps = [leadGapsCC; leadGapsF; leadGapsLC];
-   
+    AllForwardGaps = [leadGapsCC; leadGapsF; leadGapsLC];
+    AllBehindGaps  = [behindGapsCC; behindGapsF; behindGapsLC];
+
 
     % 終端状態と時間を組み合わせる。
     allTS = [termStatesCC; termStatesF; termStatesLC];
@@ -175,48 +181,66 @@ while isRunning
     EgoFrenetState = global2frenet(refPath,EgoGlobalState);
     [frenetTraj,globalTraj] = connect(connector,EgoFrenetState,allTS,AllTime);
     
-        % 同一レーンにいる最も近い前方車両との車間距離 
-    [EgoFrenetFront, EgoFrenetRear, AllActorFrenetRear, minGap, gapForwardLog, gapBehindLog, timeLog, speedLog] ...
+    % 同一レーンにいる最も近い前方車両との車間距離 
+    [AllActorFrenetState, EgoFrenetFront, EgoFrenetRear, AllActorFrenetFront, AllActorFrenetRear, ForwardGap, RearGap, gapForwardLog, gapBehindLog, timeLog, speedLog] ...
          = ComputeGaps(EgoFrenetState, carLen, rearAxleRatio, refPath, AllActorGlobalState, ...
          laneWidth, numActors, gapForwardLog, gapBehindLog, leadIdxLog, behindIdxLog, timeLog, simStep, scenario, EgoGlobalState, speedLog);
-    
-
-    dObs = AllGaps;
-    disp('dObs');
-    disp(dObs);
+ 
 
     %% ===== 軌道選定 ===== %%
-
-    % 元のコスト関数
-    % [costTS,latCostTS,timeCostTS,speedCostTS] = EvaluateTSCost(allTS,allDT,laneWidth,SpeedLimit,...
-    %     SpeedWeight, LatWeight, TimeWeight);
-    
-    % 正規化
-    % [costTS,latCostTS,timeCostTS,speedCostTS] = EvaluateTSCostNormalization(allTS,allDT,laneWidth,SpeedLimit,...
-    % SpeedWeight, LatWeight, TimeWeight);
-    
-    % 正規化＋一貫性コスト
-    % [costTS, latCostTS, timeCostTS, speedCostTS, consCostTS] ...
-    % = EvaluateTSCostNew(...
-    % allTS, allDT, laneWidth, SpeedLimit, ...
-    % SpeedWeight, LatWeight, TimeWeight, ConsistencyWeight, ...
-    % prevTS, prevT, modeBinLog);
-
-    % 正規化 + 縦方向安全コスト
-    [costTS, latCostTS, timeCostTS, speedCostTS, longSafeCostTS] = ...
+    % 正規化 + 既存コスト + 縦方向安全コスト
+    [costTS, latCostTS, timeCostTS, speedCostTS, ForwardSafeCostTS, BehindSafeCostTS] = ...
     EvaluateTSCostNormalization1(allTS, AllTime, laneWidth, SpeedLimit, ...
-                                SpeedWeight, LatWeight, TimeWeight, ...
-                                LongSafetyWeight, dObs, c1, forwardsafetyGap);
+                                SpeedWeight, LatWeight, TimeWeight, ForwardSafetyWeight, BehindSafetyWeight, c1,...
+                                AllForwardGaps, AllBehindGaps, forwardsafetyGap, behindsafetyGap, EgoFrenetState, carLen, rearAxleRatio);
    
 
     %  制約条件に違反する軌道を排除 
     isValid = EvaluateTrajectory(globalTraj,maxAcceleration,maxCurvature,minVelocity); % ここを軌道計画の段階で行いたい
     
-    % disp("Times " + num2str(simStep/10));
-    a = table(Labels, AllTime, costTS, latCostTS, timeCostTS, speedCostTS, longSafeCostTS, isValid, ...
-    'VariableNames', {'Mode', 'PredictTime', 'TotalCost', 'LatCost', 'TimeCost', 'SpeedCost', 'longSafeCostTS','制約違反'});
-    % a = table(labels, allTime, costTS, latCostTS, timeCostTS, speedCostTS, consCostTS, isValid, ...
-    % 'VariableNames', {'Mode', 'PredictTime', 'TotalCost', 'LatCost', 'TimeCost', 'SpeedCost', 'ConsistencyCost', '制約違反'});
+
+
+    %% --- シーン内の全アクターの予測軌道を衝突チェッカーに反映 --- %%
+    for i = 1:numel(actorPoses)
+        actorPoses(i).States = futureTrajectory(i).Trajectory(:,1:3);
+    end
+    updateObstaclePose(capList,actorID,actorPoses);
+
+
+
+    % --- 評価順序を決定 --- %%
+    [cost, idx] = sort(costTS);
+    optimalTrajectory = [];
+    
+    trajectoryEvaluation = nan(numel(isValid),1); % numelは要素数を返す
+    
+
+
+    % 最小コストから順に、各軌道の衝突をチェックする。
+    for i = 1:numel(idx)
+        if isValid(idx(i))
+            % エゴオブジェクトの候補軌道でカプセルリストを更新する。
+            egoPoses.States = globalTraj(idx(i)).Trajectory(:,1:3);
+            updateEgoPose(capList,egoID,egoPoses);
+    
+            % 衝突をチェックする。
+            isColliding = checkCollision(capList);
+    
+            if all(~isColliding)
+                % 衝突が検出されない場合、これが最適軌道である。
+                trajectoryEvaluation(idx(i)) = 1;
+                optimalTrajectory = globalTraj(idx(i)).Trajectory;
+                
+                break;
+            else
+                trajectoryEvaluation(idx(i)) = 0;
+            end
+        end
+    end
+
+    disp("Times " + num2str(simStep/10));
+    a = table(Labels, AllTime, costTS, latCostTS, timeCostTS, speedCostTS, ForwardSafeCostTS, BehindSafeCostTS, isValid, ...
+    'VariableNames', {'Mode', 'PredictTime', 'TotalCost', 'LatCost', 'TimeCost', 'SpeedCost', 'ForwardSafeCostTS','BehindSafeCostTS','制約違反'});
     disp(a);
       
 
@@ -386,51 +410,6 @@ while isRunning
     CruiseTotalCostLog(end+1,:)    = CruiseTotalCost;    %#ok<SAGROW>
     FollowingTotalCostLog(end+1,:) = FollowingTotalCost; %#ok<SAGROW>
     ChangeTotalCostLog (end+1,:)   = ChangeTotalCost;    %#ok<SAGROW>
-
-    %% --- シーン内の全アクターの予測軌道を衝突チェッカーに反映 --- %%
-    for i = 1:numel(actorPoses)
-        actorPoses(i).States = futureTrajectory(i).Trajectory(:,1:3);
-    end
-    updateObstaclePose(capList,actorID,actorPoses);
-
-
-
-    % --- 評価順序を決定 --- %%
-    [cost, idx] = sort(costTS);
-    optimalTrajectory = [];
-    
-    trajectoryEvaluation = nan(numel(isValid),1); % numelは要素数を返す
-    
-
-    % 車間距離も考慮した有効軌道選定（ルールベースの部分）
-    % if minGap < forwardsafetyGap 
-    %     % forwardsafetyGapよりminGapが小さい場合，isValidの最初の5要素をFalseにする
-    %     isValid(1:min(5, numel(isValid))) = false;
-    % end
-    
-
-    % 最小コストから順に、各軌道の衝突をチェックする。
-    for i = 1:numel(idx)
-        if isValid(idx(i))
-            % エゴオブジェクトの候補軌道でカプセルリストを更新する。
-            egoPoses.States = globalTraj(idx(i)).Trajectory(:,1:3);
-            updateEgoPose(capList,egoID,egoPoses);
-    
-            % 衝突をチェックする。
-            isColliding = checkCollision(capList);
-    
-            if all(~isColliding)
-                % 衝突が検出されない場合、これが最適軌道である。
-                trajectoryEvaluation(idx(i)) = 1;
-                optimalTrajectory = globalTraj(idx(i)).Trajectory;
-                
-                break;
-            else
-                trajectoryEvaluation(idx(i)) = 0;
-            end
-        end
-    end
-
     
  
     %% === 選定モードを決定し、ログ化 === %%
@@ -1053,36 +1032,6 @@ if ~isempty(timeLog)
 end
 
 
-
-%% ==== 速度（Speed） ====
-if ~isempty(timeLog) && ~isempty(speedLog)
-    v = VideoWriter('speed_bar.mp4', 'MPEG-4');
-    v.FrameRate = 10; open(v);
-    fig = figure('Name','Speed with Red Bar','NumberTitle','off'); clf(fig); hold on; grid on;
-
-    plot(timeLog, speedLog, '-', 'Color', [0.8500 0.3250 0.0980], 'LineWidth', 2, 'DisplayName', 'Ego Speed');
-    xlabel('Time (s)'); ylabel('Speed (m/s)');
-    title('Ego Vehicle Speed');
-    ylim([0 25]);
-    set(gca,'FontName','Times New Roman','FontSize',14);
-    set(findall(gca,'Type','text'),'FontName','Times New Roman');
-    barLine = xline(timeLog(1), 'r-', 'LineWidth', 2);
-    legend({'Ego Speed'},'Location','northeast','FontName','Times New Roman','FontSize',14);
-
-    timeFrames = timeLog;
-    for i = 1:length(timeFrames)
-        set(barLine, 'Value', timeFrames(i));
-        title(sprintf('Ego Speed (t = %.2f s)', timeFrames(i)), 'FontName','Times New Roman','FontSize',14);
-        frame = getframe(fig); writeVideo(v, frame);
-    end
-    close(v);
-    disp('✅ Speed + red bar video saved.');
-end
-
-
-
-
-
 %% ==== ヨー角（Yaw） ====
 if ~isempty(timeLog) && ~isempty(yawLog)
     v = VideoWriter('yaw_bar.mp4', 'MPEG-4');
@@ -1156,6 +1105,31 @@ if ~isempty(timeLog) && ~isempty(latAccLog)
 
     close(v);
     disp('✅ Lateral acceleration + red bar video saved.');
+end
+
+%% ==== 速度（Speed） ====
+if ~isempty(timeLog) && ~isempty(speedLog)
+    v = VideoWriter('speed_bar.mp4', 'MPEG-4');
+    v.FrameRate = 10; open(v);
+    fig = figure('Name','Speed with Red Bar','NumberTitle','off'); clf(fig); hold on; grid on;
+
+    plot(timeLog, speedLog, '-', 'Color', [0.8500 0.3250 0.0980], 'LineWidth', 2, 'DisplayName', 'Ego Speed');
+    xlabel('Time (s)'); ylabel('Speed (m/s)');
+    title('Ego Vehicle Speed');
+    ylim([0 25]);
+    set(gca,'FontName','Times New Roman','FontSize',14);
+    set(findall(gca,'Type','text'),'FontName','Times New Roman');
+    barLine = xline(timeLog(1), 'r-', 'LineWidth', 2);
+    legend({'Ego Speed'},'Location','northeast','FontName','Times New Roman','FontSize',14);
+
+    timeFrames = timeLog;
+    for i = 1:length(timeFrames)
+        set(barLine, 'Value', timeFrames(i));
+        title(sprintf('Ego Speed (t = %.2f s)', timeFrames(i)), 'FontName','Times New Roman','FontSize',14);
+        frame = getframe(fig); writeVideo(v, frame);
+    end
+    close(v);
+    disp('✅ Speed + red bar video saved.');
 end
 
 %% ==== 走行モード（Mode） ====
