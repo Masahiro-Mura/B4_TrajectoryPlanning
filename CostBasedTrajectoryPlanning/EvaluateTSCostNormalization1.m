@@ -22,7 +22,7 @@ function [costs, latCost, timeCost, speedCost, ForwardSafeCost, BehindSafeCost] 
     %% 前方向安全コスト
     % dObs: 各軌道 i の「前方障害物までの距離」 [m]
     ForwardSafeCost_raw = zeros(size(dForwardObs));
-    
+
     % 相対距離: 0なら安全距離ちょうど, 負なら安全距離の内側
     dRelForward = dForwardObs - carLen * rearAxleRatio - forwardsafetyGap;
 
@@ -38,7 +38,7 @@ function [costs, latCost, timeCost, speedCost, ForwardSafeCost, BehindSafeCost] 
     %% 後方安全コスト
     % dObs: 各軌道 i の「後方障害物までの距離」 [m]
     BehindSafeCost_raw = zeros(size(dBehindObs));
-    
+
     % 相対距離: 0なら安全距離ちょうど, 負なら安全距離の内側
     dRelBehind = dBehindObs - carLen * rearAxleRatio - behindsafetyGap;
 
@@ -69,3 +69,4 @@ function [costs, latCost, timeCost, speedCost, ForwardSafeCost, BehindSafeCost] 
     %% 総コスト
     costs = latCost + timeCost + speedCost + ForwardSafeCost + BehindSafeCost;
 end
+

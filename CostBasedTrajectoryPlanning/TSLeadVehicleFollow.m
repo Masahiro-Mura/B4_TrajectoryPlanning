@@ -33,7 +33,6 @@ function [terminalStates, times, leadGaps, behindGaps] = TSLeadVehicleFollow( ..
     for i = 1:nH
         t = dt(i);
 
-        % ★ 上のコードと同じロジック：
         % ego より前にいる & 将来レーン一致
         laneMatch = (curEgoLane == predictedActorLanes(i,:)');
         leadMask  = (sAct0 > sEgo0) & laneMatch(:);
@@ -49,13 +48,7 @@ function [terminalStates, times, leadGaps, behindGaps] = TSLeadVehicleFollow( ..
 
             if isfinite(actor_S1)
 
-                % ★ 上のコードと同じ：ego_S1 = actor_S1 - offset
-                ego_S1 = actor_S1 - forwardsafetyGap - carLen;
-
-                % 安全条件
-                % if sEgo0 + offset < actor_S1
-
-                    % ★ 終端状態生成
+                ego_S1 = actor_S1 - forwardsafetyGap - carLen - 2;
                     terminalStates(i,:) = [ego_S1, ...
                                             frenetStateActors(idxRel,2), ...   % 先行車速度
                                             0, ...
@@ -74,8 +67,8 @@ function [terminalStates, times, leadGaps, behindGaps] = TSLeadVehicleFollow( ..
                         gapsBehind = ego_S1 - futureBehindS;
                         gapsBehind(gapsBehind < 0) = 0;
                         behindGaps(i) = min(gapsBehind);
+                    % end
                     end
-                % end
             end
         end
     end

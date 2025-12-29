@@ -7,10 +7,10 @@ function lineHandles = VisualizeScene(lineHandles, globalTrajectories, isValid, 
     maxNumTraj = 20;
     if isempty(lineHandles)
         for i = 1:maxNumTraj
-            lineHandles(end+1) = line;
+            lineHandles(end+1) = line; 
         end
     end
-    optimalIdx = find(trajectoryEvaluation==1,1); % 最適軌道のインデックスを取得
+    optimalIdx = find(trajectoryEvaluation==1,1); 
     if ~isempty(optimalIdx)
         width = 4;
         color = 'g';
@@ -28,17 +28,13 @@ function lineHandles = VisualizeScene(lineHandles, globalTrajectories, isValid, 
             if isValid(i)
                 lineStyle = '--';
                 if ~isnan(trajectoryEvaluation(i))
-                    % Trajectory was evaluated
                     if trajectoryEvaluation(i) ~= 1
                         color = 'r';
                     end
                 else
-                    % Trajectory did not get evaluated
                     color = 'w';
                 end
             else
-                % Trajectory violated a constraint, and therefore was never
-                % evaluated
                 lineStyle = '--';
                 color = 'c';
             end
@@ -47,7 +43,6 @@ function lineHandles = VisualizeScene(lineHandles, globalTrajectories, isValid, 
                 idx = idx+1;
             end
         else
- 
             set(lineHandles(idx),'XData',[],'YData',[]);
             idx = idx+1;
         end
