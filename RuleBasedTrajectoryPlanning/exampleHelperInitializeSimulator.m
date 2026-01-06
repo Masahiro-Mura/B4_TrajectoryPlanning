@@ -27,7 +27,8 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     viewer.SampleTime = scenarioObj.SampleTime;
     
     % Create a chasePlot using the visualization scenario.
-    chasePlot(viewer.Actors(1),'ViewLocation',-[carLen*3, 0],'ViewHeight',10,'ViewPitch',20);
+    % chasePlot(viewer.Actors(1),'ViewLocation',-[carLen*3, 0],'ViewHeight',10,'ViewPitch',20);
+    chasePlot(viewer.Actors(1),'ViewLocation',-[carLen*10, 0],'ViewHeight',22,'ViewPitch',22);
 
     % Create a pop-out figure and display the current scene.
     f = gcf;

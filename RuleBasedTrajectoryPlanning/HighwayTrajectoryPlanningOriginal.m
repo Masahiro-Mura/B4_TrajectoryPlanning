@@ -129,12 +129,12 @@ while isRunning
         refPath,laneWidth,forwardsafetyGap,EgoGlobalState,AllActorGlobalState,carLen, rearAxleRatio, timeHorizons);
      
       % 車線変更の状態を生成
-    % [termStatesLC,timesLC] = exampleHelperBasicLaneChange(...
-    %     refPath,laneWidth,EgoGlobalState, timeHorizons);
+    [termStatesLC,timesLC] = exampleHelperBasicLaneChange(...
+        refPath,laneWidth,EgoGlobalState, timeHorizons);
 
-     [termStatesLC,timesLC] = exampleHelperBasicLaneChange(...
-    refPath, laneWidth, forwardsafetyGap, behindsafetyGap, ...
-    EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, timeHorizons);
+    %  [termStatesLC,timesLC] = exampleHelperBasicLaneChange(...
+    % refPath, laneWidth, forwardsafetyGap, behindsafetyGap, ...
+    % EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, timeHorizons);
     
     % 
     % disp('CC');
@@ -303,11 +303,11 @@ while isRunning
         speedLog(end+1,1) = nan; %#ok<SAGROW>
     end
 %% --- 車間距離も考慮した有効軌道選定 --- （ルールベースの部分）%%
-if minGap <= forwardsafetyGap
-    % forwardsafetyGapよりminGapが小さい場合，
-    % isValidの最初の5要素をFalseにする
-    isValid(1:min(5, numel(isValid))) = false;
-end
+% if minGap <= forwardsafetyGap
+%     % forwardsafetyGapよりminGapが小さい場合，
+%     % isValidの最初の5要素をFalseにする
+%     isValid(1:min(5, numel(isValid))) = false;
+% end
 
 
 %% --- 評価順序を決定する --- %%
@@ -457,6 +457,7 @@ if ~isempty(timeLog)
     % Set labels and title with Times New Roman
     hX = xlabel('Time (s)');
     hY = ylabel('Gap (m)');
+    hT = title('Vehicle to Vehicle Gaps');
     % hT = title('Vehicle to Vehicle Gaps');
     % Legend: show lead/behind gap lines only
     hLeg = legend([hPlotLead hPlotBehind hYlineLead hYlineBehind], ...
