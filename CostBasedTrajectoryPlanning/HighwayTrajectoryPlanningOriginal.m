@@ -73,7 +73,7 @@ behindIdxLog  = [];
 timeLog       = [];       
 speedLog      = [];     
 
-% 時間，
+% 時間
 TimeLog   = [];
 LabelLog  = strings(0,1);  
 modeBinLog    = zeros(0,3);      
@@ -431,7 +431,7 @@ fprintf('Simulation video saved to: %s\n', videoFile);
 figName = fullfile(pwd, 'LateralCost.png');
 
 if ~isempty(timeLog)
-    hFig = figure('Name','LateralCost','NumberTitle','off');
+    hFig = figure('Name','LateralCost','NumberTitle','off', "Position",[100, 100, 900, 300]);
     clf(hFig); hold on; grid on;
 
     for col = 1:size(CruiseLatCostLog, 2)  
@@ -458,7 +458,7 @@ if ~isempty(timeLog)
     xlim([0 max(timeLog)]);
     ylim([-0.1 0.4]);
 
-    set(gca, 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', 10.5);
     saveas(hFig, figName);
     fprintf('Lateral Cost plot saved to: %s\n', figName);
 end
@@ -467,7 +467,7 @@ end
 figName = fullfile(pwd, 'SpeedCost.png');
 
 if ~isempty(timeLog)
-    hFig = figure('Name','SpeedCost','NumberTitle','off');
+    hFig = figure('Name','SpeedCost','NumberTitle','off', "Position",[150, 150, 900, 300]);
     clf(hFig); hold on; grid on;
 
     for col = 1:size(CruiseSpeedCostLog, 2) 
@@ -494,7 +494,7 @@ if ~isempty(timeLog)
     xlim([0 max(timeLog)]);
     ylim([-0.1 20]);
 
-    set(gca, 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', 10.5);
     saveas(hFig, figName);
     fprintf('Speed Cost plot saved to: %s\n', figName);
 end
@@ -503,7 +503,7 @@ end
 figName = fullfile(pwd, 'TimeCost.png');
 
 if ~isempty(timeLog)
-    hFig = figure('Name','TimeCost','NumberTitle','off');
+    hFig = figure('Name','TimeCost','NumberTitle','off', "Position",[200, 200, 900, 300]);
     clf(hFig); hold on; grid on;
 
     for col = 1:size(CruiseTimeCostLog, 2)  
@@ -528,9 +528,9 @@ if ~isempty(timeLog)
     legend({'Cruise Mode', 'Following Mode', 'LaneChange Mode'}, 'Location', 'northeast');
 
     xlim([0 max(timeLog)]);
-    ylim([0 30]);
+    ylim([0 40]);
 
-    set(gca, 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', 10.5);
     saveas(hFig, figName);
     fprintf('Time Cost plot saved to: %s\n', figName);
 end
@@ -539,7 +539,7 @@ end
 figName = fullfile(pwd, 'TotalCost.png');
 
 if ~isempty(timeLog)
-    hFig = figure('Name','TotalCost','NumberTitle','off');
+    hFig = figure('Name','TotalCost','NumberTitle','off', "Position",[250, 250, 900, 300]);
     clf(hFig); hold on; grid on;
 
     for col = 1:size(CruiseTotalCostLog, 2)  
@@ -566,7 +566,7 @@ if ~isempty(timeLog)
     xlim([0 max(timeLog)]);
     ylim([0 50]);
 
-    set(gca, 'FontName', 'Times New Roman', 'FontSize', 14);
+    set(gca, 'FontName', 'Times New Roman', 'FontSize', 10.5);
     saveas(hFig, figName);
     fprintf('Total Cost plot saved to: %s\n', figName);
 end
@@ -574,7 +574,7 @@ end
 figName = fullfile(pwd, 'gap_plot.png');
 
 if ~isempty(timeLog)
-    hFig = figure('Name','Ego to lead gaps','NumberTitle','off');
+    hFig = figure('Name','Ego to lead gaps','NumberTitle','off', "Position",[300, 300, 900, 300]);
     clf(hFig); hold on; grid on;
 
     plot(timeLog, gapForwardLog, '-', 'Color', 'b', 'LineWidth', 4);
@@ -588,9 +588,9 @@ if ~isempty(timeLog)
     legend('Forward Gap','Behind Gap','Forward Safety Gap','Behind Safety Gap','Location','northwest');
 
     xlim([0 max(timeLog)]);
-    ylim([0 40]);
+    ylim([0 60]);
 
-    set(gca,'FontName','Times New Roman','FontSize',14);
+    set(gca,'FontName','Times New Roman','FontSize',10.5);
     saveas(hFig, figName);
     fprintf('Gap plot saved to: %s\n', figName);
 end
@@ -601,7 +601,7 @@ end
 speedFigName = fullfile(pwd, 'speed_plot.png');
 
 if ~isempty(timeLog)
-    hFig = figure('Name','Ego speed','NumberTitle','off');
+    hFig = figure('Name','Ego speed','NumberTitle','off', "Position",[350, 350, 900, 300]);
     clf(hFig); grid on; hold on;
     
     plot(timeLog, speedLog, '-', 'Color', [0.8500 0.3250 0.0980], 'LineWidth', 4);
@@ -614,7 +614,7 @@ if ~isempty(timeLog)
     xlim([0 max(timeLog)]);
     ylim([14 20]);
     
-    set(gca,'FontName','Times New Roman','FontSize',14);
+    set(gca,'FontName','Times New Roman','FontSize',10.5);
     saveas(hFig, speedFigName);
     fprintf('Speed plot saved to: %s\n', speedFigName); 
 end
@@ -625,7 +625,7 @@ end
 yawFigName = fullfile(pwd, 'yaw_plot.png');
 
 if ~isempty(timeLog) && ~isempty(yawLog)
-    hFig = figure('Name','Ego yaw angle','NumberTitle','off');
+    hFig = figure('Name','Ego yaw angle','NumberTitle','off', "Position",[400, 400, 900, 300]);
     clf(hFig); grid on; hold on;
 
     plot(timeLog, yawLog, '-', 'Color', [0.3010 0.7450 0.9330], 'LineWidth', 4);
@@ -638,7 +638,7 @@ if ~isempty(timeLog) && ~isempty(yawLog)
     xlim([0 max(timeLog)]);
     ylim([-5 5]);
 
-    set(gca,'FontName','Times New Roman','FontSize',14);
+    set(gca,'FontName','Times New Roman','FontSize',10.5);
     saveas(hFig, yawFigName);
     fprintf('Yaw plot saved to: %s\n', yawFigName);
 end
@@ -647,7 +647,7 @@ end
 latAccFigName = fullfile(pwd, 'lateral_acc_plot.png');
 
 if ~isempty(timeLog) && ~isempty(latAccLog)
-    hFig = figure('Name','Lateral Acceleration','NumberTitle','off');
+    hFig = figure('Name','Lateral Acceleration','NumberTitle','off', "Position",[450, 450, 900, 300]);
     clf(hFig); grid on; hold on;
 
     plot(timeLog, latAccLog, '-', 'Color', [0, 0.5, 0], 'LineWidth', 4);
@@ -660,7 +660,7 @@ if ~isempty(timeLog) && ~isempty(latAccLog)
     xlim([0 max(timeLog)]);
     ylim([-1.5 1.5]);
 
-    set(gca,'FontName','Times New Roman','FontSize',14);
+    set(gca,'FontName','Times New Roman','FontSize',10.5);
     saveas(hFig, latAccFigName);
     fprintf('Lateral acc plot saved to: %s\n', latAccFigName);
 end
@@ -672,7 +672,7 @@ end
 modeFigName = fullfile(pwd, 'mode_plot.png');
 
 if ~isempty(timeLog)
-    hFig = figure('Name','Selected Mode','NumberTitle','off'); 
+    hFig = figure('Name','Selected Mode','NumberTitle','off', "Position",[500, 500, 900, 300]); 
     clf(hFig); grid on; hold on;
 
     hCruise     = stairs(timeLog, modeBinLog(:,1), 'Color', 'r',       'LineStyle', '-','LineWidth', 2);
@@ -688,7 +688,7 @@ if ~isempty(timeLog)
     xlim([0 max(timeLog)]);
     ylim([0 3.5]);
 
-    set(gca,'FontName','Times New Roman','FontSize',14);
+    set(gca,'FontName','Times New Roman','FontSize',10.5);
     saveas(hFig, modeFigName);
     fprintf('Mode plot saved to: %s\n', modeFigName);
 end
@@ -696,7 +696,7 @@ end
 %% ===== sl座標ログ（図）===== %%
 figNameSL = fullfile(pwd, 'TrajectoryLog.png'); 
 if ~isempty(allS) && ~isempty(allL)
-    hFig = figure('Name','Frenet Trajectory','NumberTitle','off');
+    hFig = figure('Name','Frenet Trajectory','NumberTitle','off', "Position",[550, 550, 900, 300]);
     clf(hFig); hold on; grid on;
     
     z = zeros(size(allS));
@@ -726,7 +726,7 @@ end
 if ~isempty(timeLog)
     v = VideoWriter('gap_bar.mp4', 'MPEG-4');
     v.FrameRate = 10; open(v);
-    fig = figure('Name','Gap with Red Bar','NumberTitle','off'); 
+    fig = figure('Name','Gap with Red Bar','NumberTitle','off', "Position",[200, 100, 900, 300]); 
     clf(fig); hold on; grid on;
 
     plot(timeLog, gapForwardLog, '-', 'Color', 'b', 'LineWidth', 3, 'DisplayName','Forward Gap');
@@ -734,22 +734,21 @@ if ~isempty(timeLog)
     yline(forwardsafetyGap, 'b--', 'LineWidth', 2, 'DisplayName', 'Forward Safety Gap');
     yline(behindsafetyGap, 'r--', 'LineWidth', 2, 'DisplayName', 'Behind Safety Gap');
 
-    xlabel('Time (s)');
+    xlabel('Time (s)'); 
     ylabel('Gap (m)');
     title('Vehicle to Vehicle Gaps');
-    legend('Forward Gap','Behind Gap','Forward Safety Gap', 'Behind Safety Gap','FontName','Times New Roman','FontSize',14,'Location','northeast');
+    legend('Forward Gap','Behind Gap','Forward Safety Gap', 'Behind Safety Gap','FontName','Times New Roman','FontSize',10.5,'Location','northeast');
 
     xlim([0 max(timeLog)]);
     ylim([0 40]);
      
-    set(gca,'FontName','Times New Roman','FontSize',14);
+    set(gca,'FontName','Times New Roman','FontSize',10.5);
     barLine = xline(timeLog(1), 'r-', 'LineWidth', 2, 'HandleVisibility','off');
 
     timeFrames = timeLog;
     for i = 1:length(timeFrames)
         set(barLine, 'Value', timeFrames(i));
-        title(sprintf('Vehicle to Vehicle Gaps (t = %.2f s)', timeFrames(i)), ...
-              'FontName','Times New Roman','FontSize',14);
+        title('Vehicle to Vehicle Gaps','FontName','Times New Roman','FontSize',14);
         frame = getframe(fig); 
         writeVideo(v, frame);
     end
@@ -764,20 +763,20 @@ end
 if ~isempty(timeLog) && ~isempty(yawLog)
     v = VideoWriter('yaw_bar.mp4', 'MPEG-4');
     v.FrameRate = 10; open(v);
-    fig = figure('Name','Yaw with Red Bar','NumberTitle','off');
+    fig = figure('Name','Yaw with Red Bar','NumberTitle','off', "Position",[250, 150, 900, 300]);
     clf(fig); hold on; grid on;
 
-    plot(timeLog, yawLog, '-', 'Color', [0.3010 0.7450 0.9330], 'LineWidth', 2, 'DisplayName', 'Yaw Angle');
+    plot(timeLog, yawLog, '-', 'Color', [0.3010 0.7450 0.9330], 'LineWidth', 3, 'DisplayName', 'Yaw Angle');
 
     xlabel('Time (s)');
     ylabel('Yaw Angle (rad)');
     title('Ego Vehicle Yaw Angle');
-    legend('Yaw Angle','FontName','Times New Roman','FontSize',14,'Location','northeast');
+    legend('Yaw Angle','FontName','Times New Roman','FontSize',10.5,'Location','northeast');
  
     xlim([0 max(timeLog)]); 
     ylim([-5 5]);
 
-    set(gca,'FontName','Times New Roman','FontSize',14);
+    set(gca,'FontName','Times New Roman','FontSize',10.5);
     set(findall(gca,'Type','text'),'FontName','Times New Roman');
 
     barLine = xline(timeLog(1), 'r-', 'LineWidth', 2, 'HandleVisibility','off');
@@ -785,8 +784,7 @@ if ~isempty(timeLog) && ~isempty(yawLog)
     timeFrames = timeLog;
     for i = 1:length(timeFrames)
         set(barLine, 'Value', timeFrames(i));
-        title(sprintf('Yaw Angle (t = %.2f s)', timeFrames(i)), ...
-            'FontName','Times New Roman','FontSize',14);
+        title('Yaw Angle', 'FontName','Times New Roman','FontSize',14);
         frame = getframe(fig); 
         writeVideo(v, frame);
     end
@@ -801,26 +799,26 @@ if ~isempty(timeLog) && ~isempty(latAccLog)
     v = VideoWriter('lateral_acc_bar.mp4', 'MPEG-4');
     v.FrameRate = 10; open(v);
 
-    fig = figure('Name','Lateral Acceleration with Red Bar','NumberTitle','off');
+    fig = figure('Name','Lateral Acceleration with Red Bar','NumberTitle','off', "Position",[300, 200, 900, 300]);
     clf(fig); hold on; grid on;
 
-    plot(timeLog, latAccLog, 'k-', 'LineWidth', 2);
+    plot(timeLog, latAccLog, 'k-', 'LineWidth', 3);
 
     xlabel('Time (s)');
     ylabel('Lateral Acceleration (m/s^2)');
     title('Ego Vehicle Lateral Acceleration');
-    legend('Yaw Angle','FontName','Times New Roman','FontSize',14,'Location','northeast');
+    legend('Yaw Angle','FontName','Times New Roman','FontSize',10.5,'Location','northeast');
 
     xlim([0 max(timeLog)]);
-    ylim([-5 5]);
+    ylim([-2 2]);
 
-    set(gca,'FontName','Times New Roman','FontSize',14);
+    set(gca,'FontName','Times New Roman','FontSize',10.5);
 
     barLine = xline(timeLog(1), 'r-', 'LineWidth', 2, 'HandleVisibility','off');
 
     for i = 1:length(timeLog)
         set(barLine, 'Value', timeLog(i));
-        title(sprintf('Lateral Acc (t = %.2f s)', timeLog(i)));
+        title('Lateral Acc','FontName','Times New Roman','FontSize',14);
         frame = getframe(fig);
         writeVideo(v, frame);
     end
@@ -834,24 +832,25 @@ end
 if ~isempty(timeLog) && ~isempty(speedLog)
     v = VideoWriter('speed_bar.mp4', 'MPEG-4');
     v.FrameRate = 10; open(v);
-    fig = figure('Name','Speed with Red Bar','NumberTitle','off'); clf(fig); hold on; grid on;
+    fig = figure('Name','Speed with Red Bar','NumberTitle','off', "Position",[350, 250, 900, 300]); 
+    clf(fig); hold on; grid on;
 
-    plot(timeLog, speedLog, '-', 'Color', [0.8500 0.3250 0.0980], 'LineWidth', 2, 'DisplayName', 'Ego Speed');
+    plot(timeLog, speedLog, '-', 'Color', [0.8500 0.3250 0.0980], 'LineWidth', 3, 'DisplayName', 'Ego Speed');
     xlabel('Time (s)'); ylabel('Speed (m/s)');
     title('Ego Vehicle Speed');
-    legend({'Ego Speed'},'Location','northeast','FontName','Times New Roman','FontSize',14);
+    legend({'Ego Speed'},'Location','northeast','FontName','Times New Roman','FontSize',10.5);
 
     xlim([0 max(timeLog)]);
     ylim([0 25]);
 
-    set(gca,'FontName','Times New Roman','FontSize',14);
+    set(gca,'FontName','Times New Roman','FontSize',10.5);
     
     barLine = xline(timeLog(1), 'r-', 'LineWidth', 2, 'HandleVisibility','off');
     
     timeFrames = timeLog;
     for i = 1:length(timeFrames)
         set(barLine, 'Value', timeFrames(i));
-        title(sprintf('Ego Speed (t = %.2f s)', timeFrames(i)), 'FontName','Times New Roman','FontSize',14);
+        title('Ego Speed ',  'FontName','Times New Roman','FontSize',14);
         frame = getframe(fig); 
         writeVideo(v, frame);
     end
@@ -865,30 +864,29 @@ end
 if ~isempty(timeLog)
     v = VideoWriter('mode_bar.mp4', 'MPEG-4');
     v.FrameRate = 10; open(v);
-    fig = figure('Name','Mode with Red Bar','NumberTitle','off'); 
+    fig = figure('Name','Mode with Red Bar','NumberTitle','off', "Position",[400, 300, 900, 300]); 
     clf(fig); hold on; grid on;
 
-    hCruise = stairs(timeLog, modeBinLog(:,1),                                 'r:', 'LineWidth', 2);
-    hFollow = stairs(timeLog, modeBinLog(:,2),                                 'b:', 'LineWidth', 2);
-    hLane   = stairs(timeLog, modeBinLog(:,3), 'Color', [0 0.4 0], 'LineStyle', ':', 'LineWidth', 2);
+    hCruise = stairs(timeLog, modeBinLog(:,1), 'Color', 'r',       'LineStyle','-', 'LineWidth', 2);
+    hFollow = stairs(timeLog, modeBinLog(:,2), 'Color', 'b',       'LineStyle','-', 'LineWidth', 2);
+    hLane   = stairs(timeLog, modeBinLog(:,3), 'Color', [0 0.4 0], 'LineStyle','-', 'LineWidth', 2);
 
     xlabel('Time (s)');
     ylabel('Mode');
     title('Mode Transition Over Time');
-    legend([hCruise, hFollow, hLane],'Cruise','Follow','LaneChange', 'Location','northeast', 'Box','on', 'FontName','Times New Roman','FontSize',14);
+    legend([hCruise, hFollow, hLane],'Cruise','Follow','LaneChange', 'Location','northeast', 'Box','on', 'FontName','Times New Roman','FontSize',10.5);
 
     ylim([0 4]); 
     xlim([0 max(timeLog)]); 
 
-    set(gca,'FontName','Times New Roman','FontSize',14);
+    set(gca,'FontName','Times New Roman','FontSize',10.5);
 
     barLine = xline(timeLog(1), 'r-', 'LineWidth', 2, 'HandleVisibility','off');
 
     timeFrames = timeLog;
     for i = 1:length(timeFrames)
         set(barLine, 'Value', timeFrames(i));
-        title(sprintf('Mode Transition (t = %.2f s)', timeFrames(i)), ...
-              'FontName','Times New Roman','FontSize',14);
+        title('Mode Transition', 'FontName','Times New Roman','FontSize',14);
         frame = getframe(fig);
         writeVideo(v, frame);
     end
