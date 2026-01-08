@@ -2,6 +2,9 @@ function P = parameters()
 
 P = struct();
 
+% ===== 道路長 ===== %
+P.roadLen = 2000;
+
 % ===== 車両パラメータ ===== % 
 P.carLen        = 4.7;
 P.carWidth      = 1.8;
@@ -29,9 +32,17 @@ P.maxCurvature    = 0.02;
 P.minVelocity     = 0;
 
 % ===== 目標速度・車間距離 ===== %
-P.SpeedLimit      = 18;
-P.forwardsafetyGap = 16;
-P.behindsafetyGap  = 12;
+P.SpeedLimit       = 33.3;
+P.forwardsafetyGap = 20;
+P.behindsafetyGap  = 16;
+
+% ===== 周辺車両の目標速度 =====%
+P.Vel_actor1 = 35;
+P.Vel_actor2 = 35;
+P.Vel_actor3 = 33.3;
+P.Vel_actor4 = 35;
+P.Vel_actor5 = 35;
+P.Vel_actor6 = 33.3;
 
 % ===== 動画 ===== %
 P.videoFile  = fullfile(pwd, 'simulation_output.mp4');
