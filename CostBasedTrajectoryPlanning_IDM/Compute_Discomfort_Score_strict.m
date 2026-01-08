@@ -1,4 +1,4 @@
-function Me_score = compute_discomfort_score_strict(acc, jerk, direction, profile)
+function Me_score = Compute_Discomfort_Score_strict(acc, jerk, direction, profile)
     % 論文1 (de Winkel et al., 2023) Table 2 の Combined Model に基づく厳密な実装
     % -------------------------------------------------------------------------
     % acc      : 加速度ピーク [m/s^2] (絶対値)
@@ -8,9 +8,9 @@ function Me_score = compute_discomfort_score_strict(acc, jerk, direction, profil
     % -------------------------------------------------------------------------
 
     % 1. 基本係数 (Combined Model)
-    beta_0 = 0.407;  % 切片
-    beta_A = 2.297;  % 加速度主効果
-    beta_J = -0.052; % ジャーク主効果
+    beta_0 = 0.407;  % 切片（ベースとなる不快感指数）
+    beta_A = 2.297;  % 加速度主効果（加速度の大きさが不快感に与えるパラメータ）
+    beta_J = -0.052; % ジャーク主効果（ジャークが不快感に与えるパラメータ）
 
     % 2. カテゴリカル変数の係数
     beta_d_lat  = -0.177; % 方向(Lateral)
