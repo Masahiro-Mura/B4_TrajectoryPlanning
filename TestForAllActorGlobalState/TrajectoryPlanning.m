@@ -5,7 +5,7 @@
 clc; clear; close all;
 addpath('..\Scenario\m_file\');
 
-scenario = scenario_20260108_1;
+scenario = scenario_20260108;
 
 %% パラメータの読み込み
 P = parameters();
@@ -32,13 +32,13 @@ egoGeom.Geometry.FixedTransform(1,end) = -carLen*rearAxleRatio;
 
 updateEgoGeometry(capList,egoID,egoGeom);
 
-actorID = (1:6); 
-actorGeom = repelem(egoGeom,6,1); 
+actorID = (1:P.Number_of_Actor); 
+actorGeom = repelem(egoGeom,P.Number_of_Actor,1); 
 updateObstacleGeometry(capList,actorID,actorGeom) 
 
 scenario.SampleTime = connector.TimeResolution; 
 
-%% パラメータ定義
+% パラメータ定義
 replanRate          = P.replanRate;
 timeHorizons        = P.timeHorizons;
 maxHorizon          = P.maxHorizon;
@@ -66,7 +66,7 @@ simStep = P.simStep;
 
 %% 初期化
 [scenarioViewer,futureTrajectory,actorID,actorPoses,egoID,egoPoses,stepPerUpdate,EgoGlobalState,isRunning,lineHandles] = ...
-    InitializeSimulator(scenario,capList,refPath,laneWidth,replanRate,carLen);
+    InitializeSimulator(scenario,capList,refPath,replanRate,carLen);
 
 
 numActors = numel(actorID);
@@ -577,17 +577,17 @@ for targetIdx = 1:numActors
     acc_abs  = abs(raw_acc);
     me_log   = arrayfun(@(a, j) Compute_Discomfort_Score(a, j), raw_acc, jerk_val);
     
-    % 特性周波数の計算 (f = J / (2*pi*A)) [cite: 158, 241]
+    % 特性周波数の計算 (f = J / (2*pi*A))
     % ※ ゼロ除算を避けるため微小値を加算
     freq_log = jerk_val ./ (2 * pi * (acc_abs + 1e-6)); 
-    % 加速度で正規化した不快感 (ME / A) [cite: 421, 682]
+    % 加速度で正規化した不快感 (ME / A)
     norm_me_by_acc = me_log ./ (acc_abs + 1e-6);
 
     % 新しい解析用フィギュア
     figAnal = figure('Name', sprintf('Advanced Analysis: Actor %d', targetIdx), ...
                      'Color', 'w', 'Position', [800, 50, 600, 900]);
 
-    % --- 1. 3Dコンフォート・ランドスケープ [cite: 570, 626] ---
+    % --- 1. 3Dコンフォート・ランドスケープ ---
     % 加速度、ジャーク、不快感の3次元相関
     subplot(3,1,1);
     scatter3(acc_abs, jerk_val, me_log, 20, me_log, 'filled');
@@ -596,7 +596,7 @@ for targetIdx = 1:numActors
     colorbar; colormap(jet); grid on; view(45, 30);
     set(gca, 'FontName', fontName);
 
-    % --- 2. 周波数依存性プロット [cite: 479, 698] ---
+    % --- 2. 周波数依存性プロット ---
     % パルス時間の短さ（周波数）による不快感の変化
     subplot(3,1,2);
     semilogx(freq_log, norm_me_by_acc, 'o', 'MarkerSize', 3, 'Color', [0 0.447 0.741]);
@@ -645,7 +645,7 @@ if ~isempty(timeLog)
     legend('Forward Gap','Behind Gap','Forward Safety Gap','Behind Safety Gap','Location','northeast');
 
     xlim([0 max(timeLog)]);
-    ylim([0 max(gapForwardLog)+10]);
+    ylim([0 max(gapBehindLog)+10]);
 
     set(gca,'FontName','Times New Roman','FontSize',10.5);
     saveas(hFig, figName);

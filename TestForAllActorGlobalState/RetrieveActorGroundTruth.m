@@ -44,9 +44,10 @@ function [AllActorGlobalState, futureTrajectory, isRunning] = RetrieveActorGroun
     numActor = numel(futureTrajectory);
     dt = scenario.SampleTime;
     isRunning = true;
-
+    
+    P = parameters();
     % 周辺車両の到達判定 (AllActorGlobalState(:,1) が 各車のX座標)
-    if any(AllActorGlobalState(:,1) >= 2000)
+    if any(AllActorGlobalState(:,1) >= P.roadLen)
         isRunning = false;
     end
 

@@ -21,10 +21,18 @@ function [a_idm, jerk] = IDM_improve(v_follower, v_leader, gap, v_target, a_lead
     is_unconscious = (d > ABX && d < SDX) && (dlta_v_n > CLDV && dlta_v_n < OPDV);
 
     % 意識領域または無意識領域であっても20%の確率でIDMを選択する
-    if ~is_unconscious|| rand < 0.2 
+    if ~is_unconscious || rand < 0.2 
         %% 【意識領域】 標準IDM（枠外）
         s_star = S0 + v*T - (v*dlta_v_n)/(2*sqrt(a*b));
         a_idm = a * (1 - (v/v_target)^delta - (s_star/d)^2);
+        disp('v');
+        disp(v);
+        disp('v_target');
+        disp(v_target);
+        disp('s_star');
+        disp(s_star);
+        disp('d');
+        disp(d);
     else
         %% 【無意識領域】 螺旋挙動（枠内）
         if dlta_v_n <= 0

@@ -1,5 +1,5 @@
 function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPerUpdate, egoglobalState, isRunning, lineHandles] = ...
-    InitializeSimulator(scenarioObj, capList, refPath, laneWidth, replanRate, carLen)
+    InitializeSimulator(scenarioObj, capList, refPath, replanRate, carLen)
     
     restart(scenarioObj)
     close all;
@@ -7,8 +7,8 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     numActors = numel(scenarioObj.Actors)-1;
     futureTrajectory = repelem(struct('Trajectory',[]),numActors,1);
     
-    
-    egoglobalState = frenet2global(refPath,[69 33.3 0 laneWidth*0 0 0]); 
+    P = parameters();
+    egoglobalState = frenet2global(refPath,[P.Ini_s P.Ini_ds P.Ini_dds P.Ini_l P.Ini_dl P.Ini_ddl]); 
     
     
     [actorID, actorPoses] = obstaclePose(capList, capList.ObstacleIDs);
@@ -17,11 +17,11 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     stepPerUpdate = (1/replanRate)/scenarioObj.SampleTime;
     
     
-    viewer = scenario_20260108_1;
+    viewer = scenario_20260108;
     viewer.SampleTime = scenarioObj.SampleTime;
     
-    
-    chasePlot(viewer.Actors(1),'ViewLocation',-[carLen*15, 0],'ViewHeight',20,'ViewPitch',22);
+    P = parameters();
+    chasePlot(viewer.Actors(1),'ViewLocation',-[P.ViewLocation, 0],'ViewHeight',P.ViewHeight,'ViewPitch',P.ViewPitch);
     
     f = gcf;
     f.Position = [1100, 200, 690, 540]; 

@@ -173,12 +173,12 @@ while isRunning
         actorSpeeds(i) = actorSpeeds(i) + acc * dt;
         actorPositions(i, 1) = actorPositions(i, 1) + actorSpeeds(i) * dt;
 
-        % scenario.Actors(i+1).Position = actorPositions(i, :);
-        % scenario.Actors(i+1).Velocity = [actorSpeeds(i) 0 0];
+        scenario.Actors(i+1).Position = actorPositions(i, :);
+        scenario.Actors(i+1).Velocity = [actorSpeeds(i) 0 0];
     end
     
     %% 周辺車両の真値の取得
-    
+ 
     %%%%%%%% 真値 %%%%%%%%
     [AllActorGlobalState,futureTrajectory, isRunning] = RetrieveActorGroundTruth(...
         scenario,futureTrajectory,replanRate,maxHorizon);
@@ -569,9 +569,9 @@ if ~isempty(timeLog)
     hFig = figure('Name','Ego to lead gaps','NumberTitle','off', "Position",[300, 300, 900, 300]);
     clf(hFig); hold on; grid on;
 
-    plot(timeLog, gapForwardLog, '-', 'Color', 'b', 'LineWidth', 4);
+    % plot(timeLog, gapForwardLog, '-', 'Color', 'b', 'LineWidth', 4);
     plot(timeLog, gapBehindLog,  '-', 'Color', 'r', 'LineWidth', 4);
-    yline(forwardsafetyGap,      '--','Color', 'b', 'LineWidth', 2);
+    % yline(forwardsafetyGap,      '--','Color', 'b', 'LineWidth', 2);
     yline(behindsafetyGap,       '--','Color', 'r', 'LineWidth', 2);
 
     xlabel('Time (s)');
