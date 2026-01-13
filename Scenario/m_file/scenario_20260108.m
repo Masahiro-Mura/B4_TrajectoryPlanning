@@ -9,7 +9,7 @@ scenario = drivingScenario;
 
 % Add all road segments
 roadCenters = [0 0 0;
-    800 0 0];
+    1000 0 0];
 laneSpecification = lanespec(3);
 road(scenario, roadCenters, 'Lanes', laneSpecification, 'Name', '道路');
 
@@ -24,12 +24,12 @@ egoVehicle = vehicle(scenario, ...
 % Add the non-ego actors
 x___1 = vehicle(scenario, ...
     'ClassID', 1, ...
-    'Position', [40 0 0], ...
+    'Position', [23 0 0], ...
     'Mesh', driving.scenario.carMesh, ...
-    'PlotColor', [221 84 0] / 255, ...
+    'PlotColor', [225 84 0] / 255, ...
     'Name', '乗用車1');
-waypoints = [40 0 0;
-    800 0 0];
+waypoints = [23 0 0;
+    1000 0 0];
 speed = [35;35];
 waittime = [0;0];
 trajectory(x___1, waypoints, speed, waittime);
@@ -41,7 +41,7 @@ x___2 = vehicle(scenario, ...
     'PlotColor', [237 177 32] / 255, ...
     'Name', '乗用車2');
 waypoints = [43 -3.6 0;
-    800 -3.6 0];
+    1000 -3.6 0];
 speed = [35;35];
 waittime = [0;0];
 trajectory(x___2, waypoints, speed, waittime);
@@ -53,7 +53,7 @@ x___3 = vehicle(scenario, ...
     'PlotColor', [133 22 209] / 255, ...
     'Name', '乗用車3');
 waypoints = [48 3.6 0;
-    800 3.6 0];
+    1000 3.6 0];
 speed = [33.3;33.3];
 waittime = [0;0];
 trajectory(x___3, waypoints, speed, waittime);
@@ -65,7 +65,7 @@ x___4 = vehicle(scenario, ...
     'PlotColor', [59 170 50] / 255, ...
     'Name', '乗用車4');
 waypoints = [82 -3.6 0;
-    800 -3.6 0];
+    1000 -3.6 0];
 speed = [35;35];
 waittime = [0;0];
 trajectory(x___4, waypoints, speed, waittime);
@@ -77,7 +77,7 @@ x___5 = vehicle(scenario, ...
     'PlotColor', [47 190 239] / 255, ...
     'Name', '乗用車5');
 waypoints = [87 0 0;
-    800 0 0];
+    1000 0 0];
 speed = [35;35];
 waittime = [0;0];
 trajectory(x___5, waypoints, speed, waittime);
@@ -89,7 +89,7 @@ x___6 = vehicle(scenario, ...
     'PlotColor', [209 4 139] / 255, ...
     'Name', '乗用車6');
 waypoints = [96 3.6 0;
-    800 3.6 0];
+    1000 3.6 0];
 speed = [33.3;33.3];
 waittime = [0;0];
 trajectory(x___6, waypoints, speed, waittime);
