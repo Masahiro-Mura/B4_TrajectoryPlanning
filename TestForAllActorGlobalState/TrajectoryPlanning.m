@@ -66,7 +66,7 @@ simStep = P.simStep;
 
 %% 初期化
 [scenarioViewer,futureTrajectory,actorID,actorPoses,egoID,egoPoses,stepPerUpdate,EgoGlobalState,isRunning,lineHandles] = ...
-    InitializeSimulator(scenario,capList,refPath,replanRate,carLen);
+    InitializeSimulator(scenario,capList,refPath,replanRate);
 
 
 numActors = numel(actorID);

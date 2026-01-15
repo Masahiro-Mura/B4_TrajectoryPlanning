@@ -1,5 +1,5 @@
 function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPerUpdate, egoglobalState, isRunning, lineHandles] = ...
-    InitializeSimulator(scenarioObj, capList, refPath, replanRate, carLen)
+    InitializeSimulator(scenarioObj, capList, refPath, replanRate)
     
     restart(scenarioObj)
     close all;
