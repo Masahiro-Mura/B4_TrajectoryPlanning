@@ -8,7 +8,7 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     futureTrajectory = repelem(struct('Trajectory',[]),numActors,1);
     
 
-    egoglobalState = frenet2global(refPath,[69 18 0 laneWidth*0 0 0]); 
+    egoglobalState = frenet2global(refPath,[69 33.3 0 laneWidth*0 0 0]); 
     
     
     [actorID, actorPoses] = obstaclePose(capList, capList.ObstacleIDs);
@@ -17,7 +17,7 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     stepPerUpdate = (1/replanRate)/scenarioObj.SampleTime;
    
     
-    viewer = scenario_20251223;
+    viewer = scenario_20260108_1;
 
     viewer.SampleTime = scenarioObj.SampleTime;
   
