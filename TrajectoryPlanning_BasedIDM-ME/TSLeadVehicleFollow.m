@@ -1,6 +1,6 @@
 function [terminalStates, times, leadGaps, behindGaps] = TSLeadVehicleFollow( ...
     refPath, laneWidth, forwardsafetyGap, ...
-    egoState, actorState, carLen, rearAxleRatio, dt)
+    egoState, actorState, carLen, dt)
 
     %% --- Frenet変換 ---
     frenetStateEgo    = global2frenet(refPath, egoState);

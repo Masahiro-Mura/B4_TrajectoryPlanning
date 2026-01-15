@@ -2,6 +2,7 @@ function [terminalStates, times, leadGaps, behindGaps] = TSLaneChange( ...
     refPath, laneWidth, forwardsafetyGap, behindsafetyGap, ...
     EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, SpeedLimit, dt)
     
+    P = parameters();
     nDt = numel(dt);
 
     %% 自車速度ゼロなら車線変更は行わない
@@ -21,7 +22,7 @@ function [terminalStates, times, leadGaps, behindGaps] = TSLaneChange( ...
 
     %% 2. 隣接レーン（左・右）
     rawAdjLanes = EgoLaneNum0 + [-1 1];
-    validMask   = rawAdjLanes > 0 & rawAdjLanes <= 3;      % 3車線前提
+    validMask   = rawAdjLanes > 0 & rawAdjLanes <= P.laneCount;      % 3車線前提
     AdjLanesIdx = rawAdjLanes(validMask);
     AdjLanesNum = numel(AdjLanesIdx);
 
@@ -114,8 +115,9 @@ function [terminalStates, times, leadGaps, behindGaps] = TSLaneChange( ...
         vB0 = Behind_v(laneIdx);
 
         laneID   = AdjLanesIdx(laneIdx);
-        % 3車線: laneID=1,2,3 のとき 中央レーン(2)を d=0 とする
-        d_target = (2 - laneID) * laneWidth;
+        
+        P = parameters();
+        d_target = ((P.laneCount + 1) / 2 - laneID) * laneWidth;
 
         for k = 1:nDt
             t = dt(k);

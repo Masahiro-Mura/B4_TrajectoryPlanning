@@ -4,8 +4,8 @@ TSCruiseControl(refPath, laneWidth, egoState, targetVelocity, dt, AllActorGlobal
     frenetState = global2frenet(refPath, egoState);
     futureLane = PredictLane(frenetState, laneWidth, dt);
     
-    % lateralOffsets = (2-futureLane+.5)*laneWidth; % 4車線用
-    lateralOffsets = -futureLane*laneWidth+7.2; % 3車線用
+    P = parameters();
+    lateralOffsets = (P.laneCount/2 - futureLane + 0.5) * laneWidth; % 車線
     
     terminalStates      = zeros(numel(dt),6);
     terminalStates(:,1) = nan;

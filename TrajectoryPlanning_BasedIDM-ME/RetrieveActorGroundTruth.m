@@ -1,13 +1,14 @@
 function [AllActorGlobalState, futureTrajectory, isRunning] = RetrieveActorGroundTruth...
-    (scenario, futureTrajectory, maxHorizon, AllActorGlobalState)
+    (scenario, futureTrajectory, maxHorizon, AllActorGlobalState, EgoGlobalState)
     % 引数に AllActorGlobalState を追加しました
 
     numActor = numel(futureTrajectory);
     dt = scenario.SampleTime;
     isRunning = true;
-
+    
+    P = parameters();
     % 周辺車両の到達判定 (AllActorGlobalState(:,1) が 各車のX座標)
-    if any(AllActorGlobalState(:,1) >= 2000)
+    if any(AllActorGlobalState(:,1) >= P.roadLen) || EgoGlobalState(1) >= P.roadLen-30
         isRunning = false;
     end
 

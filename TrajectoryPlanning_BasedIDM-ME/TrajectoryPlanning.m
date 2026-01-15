@@ -3,9 +3,9 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 clc; clear; close all;
-addpath('..\Scenario\m_file\');
+addpath('..\Scenario\m_file_GraduationThesis\');
 
-scenario = scenario_20260108_1;
+scenario = scenario2;
 
 %% パラメータの読み込み
 P = parameters();
@@ -32,8 +32,8 @@ egoGeom.Geometry.FixedTransform(1,end) = -carLen*rearAxleRatio;
 
 updateEgoGeometry(capList,egoID,egoGeom);
 
-actorID = (1:6); 
-actorGeom = repelem(egoGeom,6,1); 
+actorID = (1:P.Number_of_Actor); 
+actorGeom = repelem(egoGeom,P.Number_of_Actor,1); 
 updateObstacleGeometry(capList,actorID,actorGeom) 
 
 scenario.SampleTime = connector.TimeResolution; 
@@ -67,7 +67,7 @@ simStep = P.simStep;
 
 %% 初期化
 [scenarioViewer,futureTrajectory,actorID,actorPoses,egoID,egoPoses,stepPerUpdate,EgoGlobalState,isRunning,lineHandles] = ...
-    InitializeSimulator(scenario,capList,refPath,laneWidth,replanRate,carLen);
+    InitializeSimulator(scenario,capList,refPath,replanRate);
 
 
 numActors = numel(actorID);
@@ -193,7 +193,8 @@ while isRunning
     
     % 2. 確定した AllActorGlobalState を使って予測軌道（等速直線）を生成
     [AllActorGlobalState, futureTrajectory, isRunning] = RetrieveActorGroundTruth(...
-        scenario, futureTrajectory, maxHorizon, AllActorGlobalState);
+        scenario, futureTrajectory, maxHorizon, AllActorGlobalState, EgoGlobalState);
+
 
     % 3. シナリオのアクター位置も同期
     for i = 1:numActors
@@ -213,10 +214,10 @@ while isRunning
     [termStatesCC,timesCC,leadGapsCC, behindGapsCC] = TSCruiseControl(...
         refPath,laneWidth,EgoGlobalState,SpeedLimit,timeHorizons, AllActorGlobalState);
     
-  
+    
     % 先行車追従
     [termStatesF,timesF,leadGapsF, behindGapsF] = TSLeadVehicleFollow(...
-        refPath,laneWidth,forwardsafetyGap,EgoGlobalState,AllActorGlobalState,carLen, rearAxleRatio, timeHorizons);
+        refPath,laneWidth,forwardsafetyGap,EgoGlobalState,AllActorGlobalState,carLen, timeHorizons);
     
     
     % 車線変更
@@ -224,7 +225,7 @@ while isRunning
         refPath, laneWidth, forwardsafetyGap, behindsafetyGap, ...
         EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, SpeedLimit, timeHorizons);
     
-   
+    
     Labels = [repmat("Cruise",     size(termStatesCC,1), 1);
               repmat("Follow",     size(termStatesF, 1), 1);
               repmat("LaneChange", size(termStatesLC,1), 1)
@@ -245,15 +246,16 @@ while isRunning
     
     disp('後続車両との車間距離');
     disp(gapBehindLog(end));
-
-    %% ===== 軌道選定 ===== %%
-    % min-max正規化
-    [costTS, latCostTS, timeCostTS, speedCostTS, ForwardSafeCostTS, BehindSafeCostTS] = ...
-    CostFunction_Normalization(allTS, AllTime, laneWidth, SpeedLimit, ...
-                                SpeedWeight, LatWeight, TimeWeight, ForwardSafetyWeight, BehindSafetyWeight, MEscoreWeight, c1,...
-                                AllForwardGaps, AllBehindGaps, forwardsafetyGap, behindsafetyGap, EgoGlobalState, EgoFrenetState, carLen, rearAxleRatio, gapBehindLog(end));
     
-    % 制約を違反している軌道の排除
+    %% ===== 軌道選定 ===== %%
+    % コスト関数 + min-max正規化
+    [costTS, latCostTS, timeCostTS, speedCostTS, ForwardSafeCostTS, BehindSafeCostTS, MEscoreCost] = ...
+    CostFunction_Normalization(allTS, AllTime, SpeedLimit, ...
+                                SpeedWeight, LatWeight, TimeWeight, ForwardSafetyWeight, BehindSafetyWeight, MEscoreWeight, c1,...
+                                AllForwardGaps, AllBehindGaps, forwardsafetyGap, behindsafetyGap, EgoFrenetState, carLen, rearAxleRatio, futureTrajectory, actorVTargets, laneWidth, dt);
+    
+    
+    % 物理的制約を違反している軌道の排除
     isValid = EvaluateTrajectory(globalTraj,maxAcceleration,maxCurvature,minVelocity); 
     
     
@@ -292,9 +294,9 @@ while isRunning
     end
     
     disp("経過時間 " + num2str(simStep/10-0.1));
-    ModeTable = table (Labels, AllTime, costTS, latCostTS, timeCostTS, speedCostTS, ForwardSafeCostTS, BehindSafeCostTS, isValid, ...
-        'VariableNames', {'Mode','PredictedTime','TotalCost','LateralCost','TimeCost','SpeedCost','ForwardGapCost','BeindGapCost','ConstraintViolation'});
-    % disp(a);  
+    ModeTable = table (Labels, AllTime, costTS, latCostTS, timeCostTS, speedCostTS, ForwardSafeCostTS, BehindSafeCostTS, MEscoreCost, isValid, ...
+        'VariableNames', {'Mode','PredictedTime','TotalCost','LateralCost','TimeCost','SpeedCost','ForwardGapCost','BeindGapCost','MEscoreCost','ConstraintViolation'});
+    disp(ModeTable);  
     
     %% 周辺車両の速度, 加速度，ジャークを記録 (IDM更新後に挿入)
     actorSpeedLog(end+1, :) = actorSpeeds;    %#ok<SAGROW>
@@ -393,7 +395,7 @@ if ~isempty(timeLog) && ~isempty(actorSpeedLog) && ~isempty(actorAccLog) && ~ise
                 0.82, 0.02, 0.55   % Actor 6
                ];
 
-    hFig = figure('Name','Surrounding Vehicle Logs','NumberTitle','off','Color', 'w', "Position",[70, 70, 900, 900]);
+    hFig = figure('Name','Surrounding Vehicle Logs','NumberTitle','off','Color', 'w', "Position",[70, 70, 450, 750]);
     clf(hFig);
 
     legendLabels = arrayfun(@(x) sprintf('Actor %d', x), 1:numActors, 'UniformOutput', false);
@@ -477,7 +479,7 @@ for targetIdx = 1:numActors
     % 評価用の絶対値加速度
     acc_abs = abs(raw_acc);
 
-    figure('Name', sprintf('Actor %d', targetIdx), 'Color', 'w', 'Position', [100, 50, 600, 900]);
+    figure('Name', sprintf('Actor %d', targetIdx), 'Color', 'w', 'Position', [100, 600, 400, 700]);
 
     % --- 1. 加速度と7段階の閾値  ---
     subplot(3,1,1);
@@ -544,7 +546,7 @@ for targetIdx = 1:numActors
 
     % 新しい解析用フィギュア
     figAnal = figure('Name', sprintf('Advanced Analysis: Actor %d', targetIdx), ...
-                     'Color', 'w', 'Position', [800, 50, 600, 900]);
+                     'Color', 'w', 'Position', [800, 50, 400, 700]);
 
     % --- 1. 3Dコンフォート・ランドスケープ [cite: 570, 626] ---
     % 加速度、ジャーク、不快感の3次元相関
@@ -590,7 +592,7 @@ end
 figName = fullfile(pwd, 'gap_plot.png');
 
 if ~isempty(timeLog)
-    hFig = figure('Name','Ego to lead gaps','NumberTitle','off', "Position",[300, 300, 900, 300]);
+    hFig = figure('Name','Ego to lead gaps','NumberTitle','off', "Position",[300, 300, 550, 250]);
     clf(hFig); hold on; grid on;
 
     % plot(timeLog, gapForwardLog, '-', 'Color', 'b', 'LineWidth', 4);
@@ -605,7 +607,7 @@ if ~isempty(timeLog)
     legend('Behind Gap','Behind Safety Gap','Location','northeast');
 
     xlim([0 max(timeLog)]);
-    ylim([0 max(gapForwardLog)+10]);
+    ylim([0 max(gapBehindLog)+10]);
 
     set(gca,'FontName','Times New Roman','FontSize',10.5);
     saveas(hFig, figName);
@@ -618,7 +620,7 @@ end
 speedFigName = fullfile(pwd, 'speed_plot.png');
 
 if ~isempty(timeLog)
-    hFig = figure('Name','Ego speed','NumberTitle','off', "Position",[350, 350, 900, 300]);
+    hFig = figure('Name','Ego speed','NumberTitle','off', "Position",[350, 650, 550, 250]);
     clf(hFig); grid on; hold on;
     
     plot(timeLog, speedLog, '-', 'Color', [0.8500 0.3250 0.0980], 'LineWidth', 4);
@@ -642,7 +644,7 @@ end
 yawFigName = fullfile(pwd, 'yaw_plot.png');
 
 if ~isempty(timeLog) && ~isempty(yawLog)
-    hFig = figure('Name','Ego yaw angle','NumberTitle','off', "Position",[400, 400, 900, 300]);
+    hFig = figure('Name','Ego yaw angle','NumberTitle','off', "Position",[400, 900, 550, 250]);
     clf(hFig); grid on; hold on;
 
     plot(timeLog, yawLog, '-', 'Color', [0.3010 0.7450 0.9330], 'LineWidth', 4);
@@ -664,7 +666,7 @@ end
 latAccFigName = fullfile(pwd, 'lateral_acc_plot.png');
 
 if ~isempty(timeLog) && ~isempty(latAccLog)
-    hFig = figure('Name','Lateral Acceleration','NumberTitle','off', "Position",[450, 450, 900, 300]);
+    hFig = figure('Name','Lateral Acceleration','NumberTitle','off', "Position",[450, 450, 550, 250]);
     clf(hFig); grid on; hold on;
 
     plot(timeLog, latAccLog, '-', 'Color', [0, 0.5, 0], 'LineWidth', 4);
@@ -689,7 +691,7 @@ end
 modeFigName = fullfile(pwd, 'mode_plot.png');
 
 if ~isempty(timeLog)
-    hFig = figure('Name','Selected Mode','NumberTitle','off', "Position",[500, 500, 900, 300]); 
+    hFig = figure('Name','Selected Mode','NumberTitle','off', "Position",[500, 700, 550, 250]); 
     clf(hFig); grid on; hold on;
 
     hCruise     = stairs(timeLog, modeBinLog(:,1), 'Color', 'r',       'LineStyle', '-','LineWidth', 2);
@@ -709,11 +711,11 @@ if ~isempty(timeLog)
     saveas(hFig, modeFigName);
     fprintf('Mode plot saved to: %s\n', modeFigName);
 end
-    
+
 %% ===== sl座標ログ（図）===== %%
 figNameSL = fullfile(pwd, 'TrajectoryLog.png'); 
 if ~isempty(allS) && ~isempty(allL)
-    hFig = figure('Name','Frenet Trajectory','NumberTitle','off', "Position",[550, 550, 900, 300]);
+    hFig = figure('Name','Frenet Trajectory','NumberTitle','off', "Position",[650, 250, 550, 250]);
     clf(hFig); hold on; grid on;
     
     z = zeros(size(allS));
@@ -745,12 +747,12 @@ if ~isempty(timeLog)
     v.FrameRate = 10; open(v);
     fig = figure('Name','Gap with Red Bar','NumberTitle','off', "Position",[200, 100, 900, 300]); 
     clf(fig); hold on; grid on;
-
+    
     plot(timeLog, gapForwardLog, '-', 'Color', 'b', 'LineWidth', 3, 'DisplayName','Forward Gap');
     plot(timeLog, gapBehindLog,  '-', 'Color', 'r', 'LineWidth', 3, 'DisplayName','Behind Gap');
     yline(forwardsafetyGap, 'b--', 'LineWidth', 2, 'DisplayName', 'Forward Safety Gap');
     yline(behindsafetyGap, 'r--', 'LineWidth', 2, 'DisplayName', 'Behind Safety Gap');
-
+    
     xlabel('Time (s)'); 
     ylabel('Gap (m)');
     title('Vehicle to Vehicle Gaps');

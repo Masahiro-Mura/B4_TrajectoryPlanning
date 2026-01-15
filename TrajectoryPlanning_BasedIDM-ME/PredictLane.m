@@ -2,16 +2,16 @@ function laneNum = PredictLane(frenetState, laneWidth, dt)
     
     narginchk(3,3);
 
-    % laneBounds = [inf (2:-1:-2)*laneWidth -inf]; % 4車線用
-    laneBounds = [inf, (1.5:-1:-1.5)*laneWidth, -inf]; % 3車線用 車線の境界線
+    P = parameters();
+    laneBounds = [inf, (P.laneCount/2:-1:-P.laneCount/2)*laneWidth, -inf];  % 車線数
 
     laneNum = zeros(numel(dt),1);
     
     for i = 1:numel(dt)
         if dt(i) == 0
             dLaneEgo = laneBounds-frenetState(4);
-            % laneNum(i) = min(find(dLaneEgo(2:(end-1)) >= 0 & dLaneEgo(3:(end)) < 0,1),4); % 4車線用
-            laneNum(i) = min(find(dLaneEgo(2:(end-1)) >= 0 & dLaneEgo(3:(end)) < 0,1),3); % 3車線用
+            
+            laneNum(i) = min(find(dLaneEgo(2:(end-1)) >= 0 & dLaneEgo(3:(end)) < 0,1),P.laneCount); 
         else
             % Retrieve current velocity/acceleration/time
             t  = dt(i);
@@ -45,8 +45,7 @@ function laneNum = PredictLane(frenetState, laneWidth, dt)
             dLaneEgo = laneBounds-(frenetState(4)+Ldiff);
 
             % Determine future lane
-            % laneNum(i) = min(find(dLaneEgo(2:(end-1)) >= 0 & dLaneEgo(3:(end)) < 0,1),4); % 4車線用     
-            laneNum(i) = min(find(dLaneEgo(2:(end-1)) >= 0 & dLaneEgo(3:(end)) < 0,1),3); % 3車線用
+            laneNum(i) = min(find(dLaneEgo(2:(end-1)) >= 0 & dLaneEgo(3:(end)) < 0,1),P.laneCount);
         end
     end
 end
