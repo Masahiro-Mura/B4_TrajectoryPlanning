@@ -15,26 +15,26 @@ P.laneWidth     = P.carWidth * 2;
 P.roadLen = 2000;
 
 % ===== 自車両の初期位置 ===== % 
-P.Ini_s   = 51.6;
-P.Ini_ds  = 33.3;
+P.Ini_s   = 100;
+P.Ini_ds  = 28;
 P.Ini_dds = 0;
-P.Ini_l   = -1.8;
+P.Ini_l   = 1.8;
 P.Ini_dl  = 0;
 P.Ini_ddl = 0;
 
 % ===== 自車両の目標速度 ===== % 
-P.SpeedLimit       = 33.3;
+P.SpeedLimit       = 28;
 
 % ===== 周辺車両の目標速度 =====%
-P.Vel_actor1 = 28;
-P.Vel_actor2 = 28;
-P.Vel_actor3 = 33.3;
+P.Vel_actor1 = 33.3;
+P.Vel_actor2 = 35;
+P.Vel_actor3 = 35;
 P.Vel_actor4 = 35;
 P.Vel_actor5 = 35;
 P.Vel_actor6 = 33.3;
 
 % ===== 周辺車両の台数 =====%
-P.Number_of_Actor = 2;
+P.Number_of_Actor = 3;
 
 
 
@@ -54,7 +54,7 @@ P.TimeWeight          = 20;
 P.SpeedWeight         = 10;
 P.ForwardSafetyWeight = 11;
 P.BehindSafetyWeight  = 8;
-P.MEscoreWeight       = 100;
+P.MEscoreWeight       = 50;
 
 % ===== 指数関数の定数 ===== %
 P.c1 = 2.8;
@@ -63,6 +63,13 @@ P.c1 = 2.8;
 P.maxAcceleration = 3;
 P.maxCurvature    = 0.02;
 P.minVelocity     = 0;
+
+% ===== IDMパラメータ =====%
+P.T      = 1.6;   
+P.S0     = 2.0; 
+P.a      = 0.73;
+P.b      = 1.67; 
+P.delta  = 4;
 
 % ===== 前後車間距離 ===== %
 P.forwardsafetyGap = 25;

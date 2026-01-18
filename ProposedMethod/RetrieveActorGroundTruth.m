@@ -1,5 +1,5 @@
 function [AllActorGlobalState, futureTrajectory, isRunning] = RetrieveActorGroundTruth...
-    (scenario, futureTrajectory, maxHorizon, AllActorGlobalState)
+    (scenario, futureTrajectory, maxHorizon, AllActorGlobalState, EgoGlobalState)
     % 引数に AllActorGlobalState を追加しました
 
     numActor = numel(futureTrajectory);

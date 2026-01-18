@@ -154,7 +154,7 @@ while isRunning
         a_leader_current = EgoGlobalState(6); 
 
         % 3. 条件分岐とIDM計算
-        if abs(actorPositions(i, 2) - EgoGlobalState(2)) < 3.4 && gap_raw > 0 % ここの3.4についてはどの程度横移動したら後方車両に影響があるか知りたい
+        if abs(actorPositions(i, 2) - EgoGlobalState(2)) < 1.8 && gap_raw > 0 % ここの3.4についてはどの程度横移動したら後方車両に影響があるか知りたい
             v_leader = EgoGlobalState(5); 
             [acc, jerk] = IDM_improve(actorSpeeds(i), v_leader, gap, v_target, a_leader_current, actorAccels(i), dt);
         else
@@ -693,20 +693,20 @@ modeFigName = fullfile(pwd, 'mode_plot.png');
 if ~isempty(timeLog)
     hFig = figure('Name','Selected Mode','NumberTitle','off', "Position",[500, 700, 550, 250]); 
     clf(hFig); grid on; hold on;
-
+    
     hCruise     = stairs(timeLog, modeBinLog(:,1), 'Color', 'r',       'LineStyle', '-','LineWidth', 2);
     hFollow     = stairs(timeLog, modeBinLog(:,2), 'Color', 'b',       'LineStyle', '-','LineWidth', 2);
     hLaneChange = stairs(timeLog, modeBinLog(:,3), 'Color', [0 0.4 0], 'LineStyle', '-','LineWidth', 2);
-
+    
     xlabel('Time (s)');
     ylabel('Mode');
-
+    
     title('Selected Mode');
     legend([hCruise, hFollow, hLaneChange], {'Cruise','Follow','LaneChange'}, 'Location','northeast');
     
     xlim([0 max(timeLog)]);
     ylim([0 3.5]);
-
+    
     set(gca,'FontName','Times New Roman','FontSize',10.5);
     saveas(hFig, modeFigName);
     fprintf('Mode plot saved to: %s\n', modeFigName);

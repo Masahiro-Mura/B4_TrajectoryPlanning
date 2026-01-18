@@ -1,10 +1,11 @@
 function [a_idm, jerk] = IDM_improve(v_follower, v_leader, gap, v_target, a_leader, a_prev, dt)
     % パラメータ設定
-    T      = 1.6;   % 先行車両が減速しても反応しなくて大丈夫と感じる時間
-    S0     = 2.0;   % どの速度帯でも最低限空けておきたい車間距離
-    a      = 0.73;  % 最大快適加速度
-    b      = 1.67;  % 最大快適減速度
-    delta  = 4;
+    P = parameters();
+    T      = P.T;    % 先行車両が減速しても反応しなくて大丈夫と感じる時間
+    S0     = P.S0;   % どの速度帯でも最低限空けておきたい車間距離
+    a      = P.a;    % 最大快適加速度
+    b      = P.b;    % 最大快適減速度
+    delta  = P.delta;
 
     dlta_v_n = v_leader - v_follower; 
 

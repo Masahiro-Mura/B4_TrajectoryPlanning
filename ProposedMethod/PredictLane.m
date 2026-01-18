@@ -1,7 +1,7 @@
 function laneNum = PredictLane(frenetState, laneWidth, dt)
     
     narginchk(3,3);
-    
+
     P = parameters();
     laneBounds = [inf, (P.laneCount/2:-1:-P.laneCount/2)*laneWidth, -inf];  % 車線数
 
@@ -44,7 +44,7 @@ function laneNum = PredictLane(frenetState, laneWidth, dt)
             % Find distance between predicted offset and each lane
             dLaneEgo = laneBounds-(frenetState(4)+Ldiff);
 
-            % Determine future lane    
+            % Determine future lane
             laneNum(i) = min(find(dLaneEgo(2:(end-1)) >= 0 & dLaneEgo(3:(end)) < 0,1),P.laneCount);
         end
     end

@@ -1,4 +1,4 @@
-function [terminalStates, times, leadGaps, behindGaps] = TSLaneChange( ...
+function [terminalStates, times, leadGaps, behindGaps] = TSLaneChange_2( ...
     refPath, laneWidth, forwardsafetyGap, behindsafetyGap, ...
     EgoGlobalState, AllActorGlobalState, carLen, rearAxleRatio, SpeedLimit, dt)
     
@@ -13,7 +13,7 @@ function [terminalStates, times, leadGaps, behindGaps] = TSLaneChange( ...
         behindGaps     = [];  
         return;
     end
-
+    
     %% 1. 自車の現Frenet状態 & 現在レーン取得
     EgoFrenet   = global2frenet(refPath, EgoGlobalState);  % [s, ds, dds, l, dl, ddl]
     sEgo0       = EgoFrenet(1);                            % 自車両の現在のs座標
@@ -22,7 +22,7 @@ function [terminalStates, times, leadGaps, behindGaps] = TSLaneChange( ...
 
     %% 2. 隣接レーン（左・右）
     rawAdjLanes = EgoLaneNum0 + [-1 1];
-    validMask   = rawAdjLanes > 0 & rawAdjLanes <= P.laneCount;   
+    validMask   = rawAdjLanes > 0 & rawAdjLanes <= P.laneCount;      % 3車線前提
     AdjLanesIdx = rawAdjLanes(validMask);
     AdjLanesNum = numel(AdjLanesIdx);
 
@@ -115,7 +115,7 @@ function [terminalStates, times, leadGaps, behindGaps] = TSLaneChange( ...
         vB0 = Behind_v(laneIdx);
 
         laneID   = AdjLanesIdx(laneIdx);
-
+        
         P = parameters();
         d_target = ((P.laneCount + 1) / 2 - laneID) * laneWidth;
 
@@ -129,54 +129,10 @@ function [terminalStates, times, leadGaps, behindGaps] = TSLaneChange( ...
             hasForwardVehicle = ~isnan(Af);
             hasBehindVehicle  = ~isnan(Ab);
 
-            % ==== 分岐ロジック====
-            %✅ 隣接車線に車両がいない場合
-            if ~hasForwardVehicle && ~hasBehindVehicle
-                s_term = NaN;
-                v_term = SpeedLimit;
-            
-            % ✅ 隣接先行車のみがいる
-            elseif hasForwardVehicle && ~hasBehindVehicle && (sF0 - sEgo0) >= forwardsafetyGap + carLen
-                if vF0 >= dsEgo0
-                    s_term = NaN;
-                    v_term = SpeedLimit;
-                else
-                    s_term = NaN;
-                    v_term = vF0;
-                end
-
-            % ✅ 隣接後方車のみがいる場合
-            elseif ~hasForwardVehicle && hasBehindVehicle && (sEgo0 - sB0) >= behindsafetyGap + carLen
-                if vB0 <= dsEgo0
-                    s_term = NaN;
-                    v_term = SpeedLimit;
-                else
-                    continue;
-                end
-
-            % ✅ 先行車・後方車どちらもいる場合 
-            else      
-                frontBoundary  = Af - carLen * rearAxleRatio - forwardsafetyGap;
-                behindBoundary = Ab + carLen * (1 - rearAxleRatio) + behindsafetyGap;
-                gap = frontBoundary - behindBoundary;                              
-
-                if gap >= carLen*1.5 && ...
-                   (sF0 - sEgo0) >= forwardsafetyGap + carLen && ...
-                   (sEgo0 - sB0) >= behindsafetyGap + carLen
-
-                    if vF0 >= dsEgo0
-                        s_term = NaN;
-                        v_term = SpeedLimit;
-                    elseif vF0 < dsEgo0 && vB0 < dsEgo0
-                        s_term = NaN;
-                        v_term = vF0;
-                    else
-                        continue;
-                    end
-                else
-                    continue;
-                end
-            end
+            % ==== ロジック====
+            s_term = NaN;
+            v_term = SpeedLimit;
+        
             
             % ======== ギャップ計算部分 =========
             sEgoPred = sEgo0 + dsEgo0 * t;  % 自車の s を等速で予測

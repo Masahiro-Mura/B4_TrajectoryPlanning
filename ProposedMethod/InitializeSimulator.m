@@ -1,5 +1,5 @@
 function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPerUpdate, egoglobalState, isRunning, lineHandles] = ...
-    InitializeSimulator(scenarioObj, capList, refPath, replanRate, carLen)
+    InitializeSimulator(scenarioObj, capList, refPath, replanRate)
     
     restart(scenarioObj)
     close all;
@@ -17,7 +17,7 @@ function [viewer, futureTrajectory, actorID, actorPoses, egoID, egoPoses, stepPe
     stepPerUpdate = (1/replanRate)/scenarioObj.SampleTime;
    
     
-    viewer = scenario2;
+    viewer = scenario_20260116_2;
 
     viewer.SampleTime = scenarioObj.SampleTime;
   
